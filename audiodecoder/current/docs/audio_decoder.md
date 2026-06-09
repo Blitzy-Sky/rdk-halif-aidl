@@ -332,12 +332,12 @@ sequenceDiagram
     App->>Dec: setAudioFormat(channels=2, sampleRate=44100) (in READY)
     App->>Dec: start()
     App->>Dec: decodeBufferWithMetadata(buf_a1, …)
-    Dec->>Lst: onFrameOutput(frame_a1, PCMMetadata{numChannels=2, sampleRate=44100})
+    Dec->>Lst: onFrameOutput(nsPresentationTime=t_a1, frameAVBufferHandle=h_a1, metadata=FrameMetadata{pcm: PCMMetadata{numChannels=2, sampleRate=44100, …}})
     Note over App,Dec: Stream switches to 48 kHz 5.1 mid-flight
     App->>Dec: setAudioFormat(channels=6, sampleRate=48000) (in STARTED — mid-stream change)
     App->>Dec: decodeBufferWithMetadata(buf_b1, …)
-    Dec->>Lst: onFrameOutput(frame_b1, PCMMetadata{numChannels=6, sampleRate=48000})
-    Note right of Lst: Sink sees the new format on the first frame post-transition.
+    Dec->>Lst: onFrameOutput(nsPresentationTime=t_b1, frameAVBufferHandle=h_b1, metadata=FrameMetadata{pcm: PCMMetadata{numChannels=6, sampleRate=48000, …}})
+    Note right of Lst: Sink sees the new format on the first frame post-transition.<br/>FrameMetadata may be null on subsequent unchanged frames<br/>(per-frame metadata is only re-emitted on change — see Frame Metadata section).
 ```
 
 ## End of Stream Signalling
