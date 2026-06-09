@@ -163,11 +163,16 @@ interface IAudioDecoderController {
 	void flush(in boolean reset);
 
     /**
-	 * Signals a discontinuity in the audio stream.
+	 * Signals a PTS discontinuity in the audio stream.
      *
      * The audio decoder must be in a state of `STARTED`.
      * Buffers that follow this call passed in `decodeBufferWithMetadata()` shall be
      * regarded as PTS discontinuous to any audio frames previously passed.
+     *
+     * This call covers PTS gaps only. It does NOT signal a sample-rate or
+     * channel-count change — for those, call `setAudioFormat()` with the
+     * new parameters while staying in STARTED. See "Mid-Stream Format
+     * Changes" in audio_decoder.md.
      *
      * This method remains the authoritative path for signalling discontinuity in
      * v1. The `InputBufferMetadata.discontinuity` field is reserved and MUST be
@@ -177,6 +182,8 @@ interface IAudioDecoderController {
      * @exception binder::Status::Exception::EX_ILLEGAL_STATE
      *
      * @pre The resource must be in State::STARTED.
+     *
+     * @see setAudioFormat()
      */
     void signalDiscontinuity();
 
@@ -252,7 +259,7 @@ interface IAudioDecoderController {
     boolean parseCodecSpecificData(in CSDAudioFormat csdAudioFormat, in byte[] codecData);
 
     /**
-     * Sets the audio stream format hint before decoding begins.
+     * Sets the audio stream format hint.
      *
      * Provides the channel count and sample rate sourced from container
      * or demuxer metadata (e.g. GStreamer caps). Required for codecs
@@ -265,6 +272,19 @@ interface IAudioDecoderController {
      * decoder will use the CSD values. If both are provided, the CSD
      * values take precedence.
      *
+     * Valid in both State::READY (initial setup before start()) and
+     * State::STARTED (mid-stream format change). When called in STARTED,
+     * the decoder applies the new format to all subsequently submitted
+     * input buffers; buffers already queued complete decoding under the
+     * old format. No lifecycle transition is triggered, no flush() is
+     * required, and signalDiscontinuity() is NOT used for this case —
+     * it covers PTS gaps only. See "Mid-Stream Format Changes" in
+     * audio_decoder.md.
+     *
+     * Codec changes (e.g. AAC -> AC-3) are out of scope; those still
+     * require stop() -> setAudioFormat() -> start() because the decoder
+     * backend itself must be reconfigured.
+     *
      * @param[in] channels    Number of audio channels.
      *                        Common values: 1 (mono), 2 (stereo),
      *                        6 (5.1 surround), 8 (7.1 surround).
@@ -273,12 +293,15 @@ interface IAudioDecoderController {
      *                        44100, 48000, 96000, 192000.
      *
      * @exception binder::Status::Exception::EX_NONE for success.
-     * @exception binder::Status::Exception::EX_ILLEGAL_STATE if the resource is not in the READY state.
-     * @exception binder::Status::Exception::EX_ILLEGAL_ARGUMENT if channels or sampleRate is <= 0.
+     * @exception binder::Status::Exception::EX_ILLEGAL_STATE if the
+     *            resource is not in State::READY or State::STARTED.
+     * @exception binder::Status::Exception::EX_ILLEGAL_ARGUMENT if
+     *            channels or sampleRate is <= 0.
      *
-     * @pre The resource must be in State::READY.
+     * @pre The resource must be in State::READY or State::STARTED.
      *
      * @see PCMMetadata.numChannels, PCMMetadata.sampleRate
+     * @see signalDiscontinuity()
      */
     void setAudioFormat(in int channels, in int sampleRate);
 }

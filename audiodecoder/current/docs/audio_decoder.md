@@ -311,6 +311,35 @@ Where the client has knowledge of PTS discontinuities in the audio stream, it sh
 
 For the first input [AV Buffer](../avbuffer/av_buffer.md) audio frame passed in for decode after the discontinuity, it shall indicate the discontinuity in its next output `FrameMetadata`.
 
+`signalDiscontinuity()` covers PTS gaps only — it does NOT signal a change of audio format. Mid-stream sample-rate or channel-count changes follow a separate contract, defined in the next section.
+
+## Mid-Stream Format Changes
+
+Live broadcast, adaptive streaming, and SSAI insertions can change the sample rate or channel configuration of a decoded audio stream without changing the codec — e.g. `44100 Hz → 48000 Hz` or `stereo → 5.1` while still AAC. The HAL contract for this case is:
+
+1. **No `stop()` / `start()` cycle is required.** The audio decoder MUST absorb an in-codec sample-rate or channel-count change while remaining in `State::STARTED`. The lifecycle does not transition back to `READY`.
+2. **`signalDiscontinuity()` is NOT the signal for a format change.** It is reserved for PTS discontinuities. Calling it on a format boundary does not by itself reconfigure the decoder.
+3. **The client signals the format change by re-calling `IAudioDecoderController.setAudioFormat(channels, sampleRate)` with the new values.** This call is valid in both `State::READY` (initial setup) and `State::STARTED` (mid-stream change). The decoder applies the new format to all subsequently submitted input buffers; previously queued buffers complete decoding under the old format.
+4. **`PCMMetadata` always reflects the format of the frame it accompanies.** When a format change crosses the decoder, the first output `FrameMetadata` produced under the new format carries the updated `PCMMetadata.sampleRate` / `PCMMetadata.numChannels` / `PCMMetadata.channelTypes`. No out-of-band notification is required; the change is visible at the sink on the first frame post-transition.
+5. **Codec changes are out of scope.** A change of `Codec` (e.g. AAC → AC-3) still requires `stop()` → `setAudioFormat()` → `start()` because the decoder backend itself must be reconfigured. This section covers in-codec parameter changes only.
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Dec as IAudioDecoderController
+    participant Lst as IAudioDecoderControllerListener
+    Note over App,Dec: Stream A: AAC 44.1 kHz stereo
+    App->>Dec: setAudioFormat(channels=2, sampleRate=44100) (in READY)
+    App->>Dec: start()
+    App->>Dec: decodeBufferWithMetadata(buf_a1, …)
+    Dec->>Lst: onFrameOutput(frame_a1, PCMMetadata{numChannels=2, sampleRate=44100})
+    Note over App,Dec: Stream switches to 48 kHz 5.1 mid-flight
+    App->>Dec: setAudioFormat(channels=6, sampleRate=48000) (in STARTED — mid-stream change)
+    App->>Dec: decodeBufferWithMetadata(buf_b1, …)
+    Dec->>Lst: onFrameOutput(frame_b1, PCMMetadata{numChannels=6, sampleRate=48000})
+    Note right of Lst: Sink sees the new format on the first frame post-transition.
+```
+
 ## End of Stream Signalling
 
 EOS rides entirely on the framework metadata parcelables on both sides of the interface. There is no separate signal method. Audio EOS is always application-driven - no supported audio elementary stream (MP3, AAC, AC-3/E-AC-3, Opus, Vorbis) carries an in-bitstream EOS marker.

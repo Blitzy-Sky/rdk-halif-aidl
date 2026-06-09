@@ -20,8 +20,18 @@ package com.rdk.hal.audiodecoder;
 import com.rdk.hal.audiodecoder.ChannelType;
 import com.rdk.hal.audiodecoder.PCMFormat;
 
-/** 
+/**
  *  @brief     PCM Audio frame metadata.
+ *
+ *  Every field on this parcelable describes the format of the frame
+ *  it accompanies. When a mid-stream format change occurs (see
+ *  "Mid-Stream Format Changes" in audio_decoder.md), the first
+ *  FrameMetadata produced under the new format carries the updated
+ *  numChannels / channelTypes / sampleRate values; subsequent frames
+ *  carry the new values until the next change. No out-of-band
+ *  format-change notification is required — the change is visible at
+ *  the sink on the first frame post-transition.
+ *
  *  @author    Luc Kennedy-Lamb
  *  @author    Peter Stieglitz
  *  @author    Douglas Adler
@@ -31,18 +41,29 @@ import com.rdk.hal.audiodecoder.PCMFormat;
 parcelable PCMMetadata {
 
     /**
-     * Number of audio channels.
+     * Number of audio channels in this frame.
+     *
+     * Reflects the format of THIS frame; on a mid-stream format change
+     * this value updates on the first frame produced under the new
+     * format. See IAudioDecoderController.setAudioFormat().
      */
     int numChannels;
 
     /**
-     * Array of ChannelType enum values.
+     * Array of ChannelType enum values for this frame.
      * The array size should match the number of channels.
+     *
+     * Reflects the format of THIS frame; updates on the first frame
+     * produced after a mid-stream channel-layout change.
      */
     ChannelType[] channelTypes;
 
     /**
-     * Sample rate in samples/second.
+     * Sample rate in samples/second for this frame.
+     *
+     * Reflects the format of THIS frame; on a mid-stream format change
+     * this value updates on the first frame produced under the new
+     * format. See IAudioDecoderController.setAudioFormat().
      */
     int sampleRate;
 
