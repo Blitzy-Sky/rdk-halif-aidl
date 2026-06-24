@@ -318,6 +318,71 @@ BpKeyVaultController::BpKeyVaultController(const ::android::sp<::android::IBinde
   return _aidl_status;
 }
 
+::android::binder::Status BpKeyVaultController::importWrappedKey(const ::std::string& alias, ::com::rdk::hal::cryptoengine::Algorithm algorithm, ::com::rdk::hal::cryptoengine::KeyType keyType, const ::std::vector<uint8_t>& wrappedKeyData, const ::std::string& wrappingKeyAlias, const ::com::rdk::hal::cryptoengine::CryptoConfig& unwrapParams, int32_t usages, bool extractable, ::com::rdk::hal::keyvault::KeyDescriptor* _aidl_return) {
+  ::android::Parcel _aidl_data;
+  _aidl_data.markForBinder(remoteStrong());
+  ::android::Parcel _aidl_reply;
+  ::android::status_t _aidl_ret_status = ::android::OK;
+  ::android::binder::Status _aidl_status;
+  _aidl_ret_status = _aidl_data.writeInterfaceToken(getInterfaceDescriptor());
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeUtf8AsUtf16(alias);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeInt32(static_cast<int32_t>(algorithm));
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeInt32(static_cast<int32_t>(keyType));
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeByteVector(wrappedKeyData);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeUtf8AsUtf16(wrappingKeyAlias);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeParcelable(unwrapParams);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeInt32(usages);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeBool(extractable);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = remote()->transact(BnKeyVaultController::TRANSACTION_importWrappedKey, _aidl_data, &_aidl_reply, 0);
+  if (UNLIKELY(_aidl_ret_status == ::android::UNKNOWN_TRANSACTION && IKeyVaultController::getDefaultImpl())) {
+     return IKeyVaultController::getDefaultImpl()->importWrappedKey(alias, algorithm, keyType, wrappedKeyData, wrappingKeyAlias, unwrapParams, usages, extractable, _aidl_return);
+  }
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_status.readFromParcel(_aidl_reply);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  if (!_aidl_status.isOk()) {
+    return _aidl_status;
+  }
+  _aidl_ret_status = _aidl_reply.readParcelable(_aidl_return);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_error:
+  _aidl_status.setFromStatusT(_aidl_ret_status);
+  return _aidl_status;
+}
+
 ::android::binder::Status BpKeyVaultController::exportKey(const ::std::string& alias, ::std::vector<uint8_t>* _aidl_return) {
   ::android::Parcel _aidl_data;
   _aidl_data.markForBinder(remoteStrong());
@@ -335,6 +400,51 @@ BpKeyVaultController::BpKeyVaultController(const ::android::sp<::android::IBinde
   _aidl_ret_status = remote()->transact(BnKeyVaultController::TRANSACTION_exportKey, _aidl_data, &_aidl_reply, 0);
   if (UNLIKELY(_aidl_ret_status == ::android::UNKNOWN_TRANSACTION && IKeyVaultController::getDefaultImpl())) {
      return IKeyVaultController::getDefaultImpl()->exportKey(alias, _aidl_return);
+  }
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_status.readFromParcel(_aidl_reply);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  if (!_aidl_status.isOk()) {
+    return _aidl_status;
+  }
+  _aidl_ret_status = _aidl_reply.readByteVector(_aidl_return);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_error:
+  _aidl_status.setFromStatusT(_aidl_ret_status);
+  return _aidl_status;
+}
+
+::android::binder::Status BpKeyVaultController::exportWrappedKey(const ::std::string& alias, const ::std::string& wrappingKeyAlias, const ::com::rdk::hal::cryptoengine::CryptoConfig& wrapParams, ::std::vector<uint8_t>* _aidl_return) {
+  ::android::Parcel _aidl_data;
+  _aidl_data.markForBinder(remoteStrong());
+  ::android::Parcel _aidl_reply;
+  ::android::status_t _aidl_ret_status = ::android::OK;
+  ::android::binder::Status _aidl_status;
+  _aidl_ret_status = _aidl_data.writeInterfaceToken(getInterfaceDescriptor());
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeUtf8AsUtf16(alias);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeUtf8AsUtf16(wrappingKeyAlias);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = _aidl_data.writeParcelable(wrapParams);
+  if (((_aidl_ret_status) != (::android::OK))) {
+    goto _aidl_error;
+  }
+  _aidl_ret_status = remote()->transact(BnKeyVaultController::TRANSACTION_exportWrappedKey, _aidl_data, &_aidl_reply, 0);
+  if (UNLIKELY(_aidl_ret_status == ::android::UNKNOWN_TRANSACTION && IKeyVaultController::getDefaultImpl())) {
+     return IKeyVaultController::getDefaultImpl()->exportWrappedKey(alias, wrappingKeyAlias, wrapParams, _aidl_return);
   }
   if (((_aidl_ret_status) != (::android::OK))) {
     goto _aidl_error;
@@ -968,6 +1078,71 @@ BnKeyVaultController::BnKeyVaultController()
     }
   }
   break;
+  case BnKeyVaultController::TRANSACTION_importWrappedKey:
+  {
+    ::std::string in_alias;
+    ::com::rdk::hal::cryptoengine::Algorithm in_algorithm;
+    ::com::rdk::hal::cryptoengine::KeyType in_keyType;
+    ::std::vector<uint8_t> in_wrappedKeyData;
+    ::std::string in_wrappingKeyAlias;
+    ::com::rdk::hal::cryptoengine::CryptoConfig in_unwrapParams;
+    int32_t in_usages;
+    bool in_extractable;
+    ::com::rdk::hal::keyvault::KeyDescriptor _aidl_return;
+    if (!(_aidl_data.checkInterface(this))) {
+      _aidl_ret_status = ::android::BAD_TYPE;
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readUtf8FromUtf16(&in_alias);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readInt32(reinterpret_cast<int32_t *>(&in_algorithm));
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readInt32(reinterpret_cast<int32_t *>(&in_keyType));
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readByteVector(&in_wrappedKeyData);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readUtf8FromUtf16(&in_wrappingKeyAlias);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readParcelable(&in_unwrapParams);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readInt32(&in_usages);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readBool(&in_extractable);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    if (auto st = _aidl_data.enforceNoDataAvail(); !st.isOk()) {
+      _aidl_ret_status = st.writeToParcel(_aidl_reply);
+      break;
+    }
+    ::android::binder::Status _aidl_status(importWrappedKey(in_alias, in_algorithm, in_keyType, in_wrappedKeyData, in_wrappingKeyAlias, in_unwrapParams, in_usages, in_extractable, &_aidl_return));
+    _aidl_ret_status = _aidl_status.writeToParcel(_aidl_reply);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    if (!_aidl_status.isOk()) {
+      break;
+    }
+    _aidl_ret_status = _aidl_reply->writeParcelable(_aidl_return);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+  }
+  break;
   case BnKeyVaultController::TRANSACTION_exportKey:
   {
     ::std::string in_alias;
@@ -985,6 +1160,46 @@ BnKeyVaultController::BnKeyVaultController()
       break;
     }
     ::android::binder::Status _aidl_status(exportKey(in_alias, &_aidl_return));
+    _aidl_ret_status = _aidl_status.writeToParcel(_aidl_reply);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    if (!_aidl_status.isOk()) {
+      break;
+    }
+    _aidl_ret_status = _aidl_reply->writeByteVector(_aidl_return);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+  }
+  break;
+  case BnKeyVaultController::TRANSACTION_exportWrappedKey:
+  {
+    ::std::string in_alias;
+    ::std::string in_wrappingKeyAlias;
+    ::com::rdk::hal::cryptoengine::CryptoConfig in_wrapParams;
+    ::std::vector<uint8_t> _aidl_return;
+    if (!(_aidl_data.checkInterface(this))) {
+      _aidl_ret_status = ::android::BAD_TYPE;
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readUtf8FromUtf16(&in_alias);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readUtf8FromUtf16(&in_wrappingKeyAlias);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    _aidl_ret_status = _aidl_data.readParcelable(&in_wrapParams);
+    if (((_aidl_ret_status) != (::android::OK))) {
+      break;
+    }
+    if (auto st = _aidl_data.enforceNoDataAvail(); !st.isOk()) {
+      _aidl_ret_status = st.writeToParcel(_aidl_reply);
+      break;
+    }
+    ::android::binder::Status _aidl_status(exportWrappedKey(in_alias, in_wrappingKeyAlias, in_wrapParams, &_aidl_return));
     _aidl_ret_status = _aidl_status.writeToParcel(_aidl_reply);
     if (((_aidl_ret_status) != (::android::OK))) {
       break;

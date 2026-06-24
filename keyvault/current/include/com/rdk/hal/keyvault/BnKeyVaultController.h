@@ -16,16 +16,18 @@ public:
   static constexpr uint32_t TRANSACTION_generateKey = ::android::IBinder::FIRST_CALL_TRANSACTION + 4;
   static constexpr uint32_t TRANSACTION_generateKeyPair = ::android::IBinder::FIRST_CALL_TRANSACTION + 5;
   static constexpr uint32_t TRANSACTION_importKey = ::android::IBinder::FIRST_CALL_TRANSACTION + 6;
-  static constexpr uint32_t TRANSACTION_exportKey = ::android::IBinder::FIRST_CALL_TRANSACTION + 7;
-  static constexpr uint32_t TRANSACTION_deleteKey = ::android::IBinder::FIRST_CALL_TRANSACTION + 8;
-  static constexpr uint32_t TRANSACTION_deleteAllKeys = ::android::IBinder::FIRST_CALL_TRANSACTION + 9;
-  static constexpr uint32_t TRANSACTION_rotateKey = ::android::IBinder::FIRST_CALL_TRANSACTION + 10;
-  static constexpr uint32_t TRANSACTION_listKeys = ::android::IBinder::FIRST_CALL_TRANSACTION + 11;
-  static constexpr uint32_t TRANSACTION_getKeyInfo = ::android::IBinder::FIRST_CALL_TRANSACTION + 12;
-  static constexpr uint32_t TRANSACTION_deriveIntoVault = ::android::IBinder::FIRST_CALL_TRANSACTION + 13;
-  static constexpr uint32_t TRANSACTION_flush = ::android::IBinder::FIRST_CALL_TRANSACTION + 14;
-  static constexpr uint32_t TRANSACTION_registerEventListener = ::android::IBinder::FIRST_CALL_TRANSACTION + 15;
-  static constexpr uint32_t TRANSACTION_unregisterEventListener = ::android::IBinder::FIRST_CALL_TRANSACTION + 16;
+  static constexpr uint32_t TRANSACTION_importWrappedKey = ::android::IBinder::FIRST_CALL_TRANSACTION + 7;
+  static constexpr uint32_t TRANSACTION_exportKey = ::android::IBinder::FIRST_CALL_TRANSACTION + 8;
+  static constexpr uint32_t TRANSACTION_exportWrappedKey = ::android::IBinder::FIRST_CALL_TRANSACTION + 9;
+  static constexpr uint32_t TRANSACTION_deleteKey = ::android::IBinder::FIRST_CALL_TRANSACTION + 10;
+  static constexpr uint32_t TRANSACTION_deleteAllKeys = ::android::IBinder::FIRST_CALL_TRANSACTION + 11;
+  static constexpr uint32_t TRANSACTION_rotateKey = ::android::IBinder::FIRST_CALL_TRANSACTION + 12;
+  static constexpr uint32_t TRANSACTION_listKeys = ::android::IBinder::FIRST_CALL_TRANSACTION + 13;
+  static constexpr uint32_t TRANSACTION_getKeyInfo = ::android::IBinder::FIRST_CALL_TRANSACTION + 14;
+  static constexpr uint32_t TRANSACTION_deriveIntoVault = ::android::IBinder::FIRST_CALL_TRANSACTION + 15;
+  static constexpr uint32_t TRANSACTION_flush = ::android::IBinder::FIRST_CALL_TRANSACTION + 16;
+  static constexpr uint32_t TRANSACTION_registerEventListener = ::android::IBinder::FIRST_CALL_TRANSACTION + 17;
+  static constexpr uint32_t TRANSACTION_unregisterEventListener = ::android::IBinder::FIRST_CALL_TRANSACTION + 18;
   static constexpr uint32_t TRANSACTION_getInterfaceVersion = ::android::IBinder::FIRST_CALL_TRANSACTION + 16777214;
   static constexpr uint32_t TRANSACTION_getInterfaceHash = ::android::IBinder::FIRST_CALL_TRANSACTION + 16777213;
   explicit BnKeyVaultController();
@@ -59,8 +61,14 @@ public:
   ::android::binder::Status importKey(const ::std::string& alias, ::com::rdk::hal::cryptoengine::Algorithm algorithm, ::com::rdk::hal::cryptoengine::KeyType keyType, const ::std::vector<uint8_t>& keyData, int32_t usages, bool extractable, ::com::rdk::hal::keyvault::KeyDescriptor* _aidl_return) override {
     return _aidl_delegate->importKey(alias, algorithm, keyType, keyData, usages, extractable, _aidl_return);
   }
+  ::android::binder::Status importWrappedKey(const ::std::string& alias, ::com::rdk::hal::cryptoengine::Algorithm algorithm, ::com::rdk::hal::cryptoengine::KeyType keyType, const ::std::vector<uint8_t>& wrappedKeyData, const ::std::string& wrappingKeyAlias, const ::com::rdk::hal::cryptoengine::CryptoConfig& unwrapParams, int32_t usages, bool extractable, ::com::rdk::hal::keyvault::KeyDescriptor* _aidl_return) override {
+    return _aidl_delegate->importWrappedKey(alias, algorithm, keyType, wrappedKeyData, wrappingKeyAlias, unwrapParams, usages, extractable, _aidl_return);
+  }
   ::android::binder::Status exportKey(const ::std::string& alias, ::std::vector<uint8_t>* _aidl_return) override {
     return _aidl_delegate->exportKey(alias, _aidl_return);
+  }
+  ::android::binder::Status exportWrappedKey(const ::std::string& alias, const ::std::string& wrappingKeyAlias, const ::com::rdk::hal::cryptoengine::CryptoConfig& wrapParams, ::std::vector<uint8_t>* _aidl_return) override {
+    return _aidl_delegate->exportWrappedKey(alias, wrappingKeyAlias, wrapParams, _aidl_return);
   }
   ::android::binder::Status deleteKey(const ::std::string& alias) override {
     return _aidl_delegate->deleteKey(alias);

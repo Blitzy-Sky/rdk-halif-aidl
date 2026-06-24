@@ -36,7 +36,9 @@ public:
   virtual ::android::binder::Status generateKey(const ::std::string& alias, ::com::rdk::hal::cryptoengine::Algorithm algorithm, int32_t keySizeBits, int32_t usages, bool extractable, ::com::rdk::hal::keyvault::KeyDescriptor* _aidl_return) = 0;
   virtual ::android::binder::Status generateKeyPair(const ::std::string& publicAlias, const ::std::string& privateAlias, ::com::rdk::hal::cryptoengine::Algorithm algorithm, int32_t keySizeBits, int32_t usages, bool extractable, ::std::vector<::com::rdk::hal::keyvault::KeyDescriptor>* _aidl_return) = 0;
   virtual ::android::binder::Status importKey(const ::std::string& alias, ::com::rdk::hal::cryptoengine::Algorithm algorithm, ::com::rdk::hal::cryptoengine::KeyType keyType, const ::std::vector<uint8_t>& keyData, int32_t usages, bool extractable, ::com::rdk::hal::keyvault::KeyDescriptor* _aidl_return) = 0;
+  virtual ::android::binder::Status importWrappedKey(const ::std::string& alias, ::com::rdk::hal::cryptoengine::Algorithm algorithm, ::com::rdk::hal::cryptoengine::KeyType keyType, const ::std::vector<uint8_t>& wrappedKeyData, const ::std::string& wrappingKeyAlias, const ::com::rdk::hal::cryptoengine::CryptoConfig& unwrapParams, int32_t usages, bool extractable, ::com::rdk::hal::keyvault::KeyDescriptor* _aidl_return) = 0;
   virtual ::android::binder::Status exportKey(const ::std::string& alias, ::std::vector<uint8_t>* _aidl_return) = 0;
+  virtual ::android::binder::Status exportWrappedKey(const ::std::string& alias, const ::std::string& wrappingKeyAlias, const ::com::rdk::hal::cryptoengine::CryptoConfig& wrapParams, ::std::vector<uint8_t>* _aidl_return) = 0;
   virtual ::android::binder::Status deleteKey(const ::std::string& alias) = 0;
   virtual ::android::binder::Status deleteAllKeys() = 0;
   virtual ::android::binder::Status rotateKey(const ::std::string& alias, ::com::rdk::hal::keyvault::KeyDescriptor* _aidl_return) = 0;
@@ -76,7 +78,13 @@ public:
   ::android::binder::Status importKey(const ::std::string& /*alias*/, ::com::rdk::hal::cryptoengine::Algorithm /*algorithm*/, ::com::rdk::hal::cryptoengine::KeyType /*keyType*/, const ::std::vector<uint8_t>& /*keyData*/, int32_t /*usages*/, bool /*extractable*/, ::com::rdk::hal::keyvault::KeyDescriptor* /*_aidl_return*/) override {
     return ::android::binder::Status::fromStatusT(::android::UNKNOWN_TRANSACTION);
   }
+  ::android::binder::Status importWrappedKey(const ::std::string& /*alias*/, ::com::rdk::hal::cryptoengine::Algorithm /*algorithm*/, ::com::rdk::hal::cryptoengine::KeyType /*keyType*/, const ::std::vector<uint8_t>& /*wrappedKeyData*/, const ::std::string& /*wrappingKeyAlias*/, const ::com::rdk::hal::cryptoengine::CryptoConfig& /*unwrapParams*/, int32_t /*usages*/, bool /*extractable*/, ::com::rdk::hal::keyvault::KeyDescriptor* /*_aidl_return*/) override {
+    return ::android::binder::Status::fromStatusT(::android::UNKNOWN_TRANSACTION);
+  }
   ::android::binder::Status exportKey(const ::std::string& /*alias*/, ::std::vector<uint8_t>* /*_aidl_return*/) override {
+    return ::android::binder::Status::fromStatusT(::android::UNKNOWN_TRANSACTION);
+  }
+  ::android::binder::Status exportWrappedKey(const ::std::string& /*alias*/, const ::std::string& /*wrappingKeyAlias*/, const ::com::rdk::hal::cryptoengine::CryptoConfig& /*wrapParams*/, ::std::vector<uint8_t>* /*_aidl_return*/) override {
     return ::android::binder::Status::fromStatusT(::android::UNKNOWN_TRANSACTION);
   }
   ::android::binder::Status deleteKey(const ::std::string& /*alias*/) override {

@@ -165,6 +165,30 @@ interface IKeyVaultController {
     KeyDescriptor importKey(in @utf8InCpp String alias, in Algorithm algorithm, in KeyType keyType, in byte[] keyData, in int usages, in boolean extractable);
 
     /**
+     * @brief Import a key in wrapped (encrypted) form, unwrapped only inside the secure environment.
+     *
+     * Unlike importKey(), the caller never holds the plaintext key. The wrapped
+     * blob is unwrapped by the secure environment using a wrapping key that
+     * already resides in this vault (referenced by wrappingKeyAlias), so
+     * plaintext key material never enters REE memory. This is the secure path
+     * for provisioning an externally-generated key onto the device.
+     *
+     * @param alias Unique name for the imported key within this vault.
+     * @param algorithm Algorithm of the key being imported (its unwrapped form).
+     * @param keyType Key type (SECRET, PUBLIC, or PRIVATE).
+     * @param wrappedKeyData The key material wrapped under the wrapping key.
+     * @param wrappingKeyAlias Alias of the unwrapping key in this vault (must have UNWRAP_KEY usage).
+     * @param unwrapParams Crypto configuration describing how to unwrap (algorithm, block mode, padding, IV). config.keyData is ignored.
+     * @param usages Allowed usages for the imported key as a bitmask of KeyPurpose values.
+     * @param extractable Whether the imported key may later be exported in raw form.
+     * @returns KeyDescriptor for the imported key.
+     * @exception binder::Status EX_ILLEGAL_ARGUMENT if alias already exists, wrappedKeyData is empty, or params are invalid.
+     * @exception binder::Status EX_SECURITY if wrappingKeyAlias does not have UNWRAP_KEY usage.
+     * @exception binder::Status EX_ILLEGAL_STATE if no crypto engine is attached.
+     */
+    KeyDescriptor importWrappedKey(in @utf8InCpp String alias, in Algorithm algorithm, in KeyType keyType, in byte[] wrappedKeyData, in @utf8InCpp String wrappingKeyAlias, in CryptoConfig unwrapParams, in int usages, in boolean extractable);
+
+    /**
      * @brief Export raw key material from the vault.
      *
      * Only permitted for keys created with extractable = true.
@@ -175,6 +199,25 @@ interface IKeyVaultController {
      * @exception binder::Status EX_SECURITY if the key is not extractable.
      */
     byte[] exportKey(in @utf8InCpp String alias);
+
+    /**
+     * @brief Export a key in wrapped (encrypted) form for secure transport.
+     *
+     * The key is wrapped inside the secure environment under a wrapping key that
+     * resides in this vault (referenced by wrappingKeyAlias); plaintext key
+     * material never leaves the secure environment. This permits secure
+     * migration of a key — including a non-extractable key — to another vault
+     * or device that holds the corresponding unwrapping key.
+     *
+     * @param alias Alias of the key to export.
+     * @param wrappingKeyAlias Alias of the wrapping key in this vault (must have WRAP_KEY usage).
+     * @param wrapParams Crypto configuration describing how to wrap (algorithm, block mode, padding, IV).
+     * @returns The wrapped key material.
+     * @exception binder::Status EX_ILLEGAL_ARGUMENT if either alias does not exist.
+     * @exception binder::Status EX_SECURITY if wrappingKeyAlias does not have WRAP_KEY usage.
+     * @exception binder::Status EX_ILLEGAL_STATE if no crypto engine is attached.
+     */
+    byte[] exportWrappedKey(in @utf8InCpp String alias, in @utf8InCpp String wrappingKeyAlias, in CryptoConfig wrapParams);
 
     /**
      * @brief Delete a key from this vault.
