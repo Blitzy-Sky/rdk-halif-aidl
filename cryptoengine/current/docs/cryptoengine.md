@@ -4,6 +4,8 @@ The CryptoEngine HAL provides standalone cryptographic operations independent of
 
 The engine operates on caller-provided key material and configuration. It has no concept of key storage or ownership — it receives keys, performs operations, and returns results.
 
+Together with the KeyVault HAL, the CryptoEngine forms a **Cryptographic Key Management System (CKMS)** in the sense of NIST SP 800-130: the CryptoEngine is the key-use plane (the operations); the KeyVault is the key-management plane (storage, lifecycle, policy). The engine is the reusable half — it also serves callers that bring their own key material, with no vault involved.
+
 Excluded: key storage, key lifecycle, and access policy.
 
 ---
@@ -217,6 +219,8 @@ The CryptoEngine operates standalone with caller-provided key material.
 ### HMAC Signing
 
 **If you need to** sign requests or data for integrity verification using a key the caller holds:
+
+> `computeHmac` is an application MAC — a key-usage operation over caller data. It is distinct from the keystore-integrity HMAC the KeyVault's TA computes at rest over a vault (see [KeyVault HAL](../../keyvault/current/docs/keyvault.md)); that one is internal and never exposed here.
 
 ```mermaid
 sequenceDiagram

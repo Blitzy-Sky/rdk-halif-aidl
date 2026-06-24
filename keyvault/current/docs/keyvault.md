@@ -4,6 +4,8 @@ The KeyVault HAL provides secure key storage and lifecycle management. It abstra
 
 A KeyVault is purely a key store — it holds key material and manages key metadata. To perform cryptographic operations on vault-managed keys, callers attach an `ICryptoEngineController` to the vault. The engine then uses the vault's keys for its operations.
 
+Together with the CryptoEngine HAL, the KeyVault forms a **Cryptographic Key Management System (CKMS)** in the sense of NIST SP 800-130: the KeyVault is the key-management plane (storage, lifecycle, policy) and the CryptoEngine is the key-use plane (the operations). Key management is the system; the cryptographic operations are one part of it.
+
 Excluded: cryptographic operations themselves — these are the responsibility of the CryptoEngine HAL.
 
 ## References
@@ -179,6 +181,8 @@ This means:
 ### Key principles
 
 - **KeyVault manages metadata and persistence.** It holds aliases, descriptors, and encrypted blobs. It reads and writes the encrypted keystore. It never performs crypto directly — it delegates to the attached CryptoEngine.
+- **Key lifecycle binds policy at creation.** `generateKey`, `importKey`, `importWrappedKey`, and `deriveIntoVault` live on the KeyVault, not the engine, so a key's `usages` and `extractable` policy are fixed where the key is stored. (Contrast WebCrypto, which places these verbs on the engine — `crypto.subtle` — because it has no vault.)
+- **Two distinct HMACs.** The keystore-integrity HMAC the TA computes over a vault is an internal at-rest tamper check, keyed by the OTP root; it never surfaces to callers. An application HMAC is a separate key-usage operation performed by the CryptoEngine (`computeHmac`) under a vault key. Same primitive, different layers.
 - **CryptoEngine is the TEE gateway.** It is the only REE component that communicates with the TA. All key generation, encryption, decryption, signing, and derivation flow through the CryptoEngine to the TA.
 - **The TA is the security boundary.** Plaintext key material exists only in TEE-protected memory. The TA generates keys, encrypts blobs with OTP-derived vault keys, and performs all crypto operations.
 - **Encrypted blobs transit the REE but are opaque.** The KeyVault and CryptoEngine handle encrypted blobs as byte arrays. Only the TA can decrypt them using OTP-derived keys that never leave the TEE.
@@ -499,7 +503,9 @@ sequenceDiagram
 ### Key import and export
 
 - `importKey(alias, algorithm, keyType, keyData, usages, extractable)` — encrypts raw key material at rest using vault root-derived key
+- `importWrappedKey(alias, algorithm, keyType, wrappedKeyData, wrappingKeyAlias, unwrapParams, usages, extractable)` — imports a key that is unwrapped only inside the secure environment, so plaintext never enters the REE. The secure path for provisioning an externally-generated key.
 - `exportKey(alias)` — returns raw key material only if `extractable == true`
+- `exportWrappedKey(alias, wrappingKeyAlias, wrapParams)` — wraps the key inside the TA under a vault wrapping key for secure migration, including non-extractable keys
 - `deleteKey(alias)` — securely erases key material and re-persists the keystore
 
 ---
