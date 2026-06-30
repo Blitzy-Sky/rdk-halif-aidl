@@ -25,7 +25,7 @@ Excluded: key storage, key lifecycle, and access policy.
 ## Related Pages
 
 !!! tip "Related Pages"
-    - [KeyVault HAL](../../keyvault/current/docs/keyvault.md) — key storage and lifecycle; attaches a CryptoEngine for operations on vault-managed keys
+    - [KeyVault HAL](../../keyvault/current/docs/keyvault.md) — key storage and lifecycle; yields opaque key blobs (`getKeyBlob`) for CryptoEngine operations on vault-managed keys
     - [HAL Interface Overview](../../key_concepts/hal/hal_interfaces.md)
     - [HAL Feature Profile](../../key_concepts/hal/hal_feature_profiles.md)
 
@@ -38,7 +38,7 @@ The CryptoEngine HAL has three layers:
 | Interface | Role |
 |-----------|------|
 | `ICryptoEngine` | Top-level manager. Enumerates capabilities and opens sessions. |
-| `ICryptoEngineController` | Per-session controller. Provides streaming (`begin`/`update`/`finish`) and one-shot crypto operations. |
+| `ICryptoEngineController` | Per-session controller. Provides streaming (`begin`/`update`/`finish`) and one-shot crypto operations, on either caller-provided key material or a vault key blob. |
 | `ICryptoOperation` | Handle for an in-progress streaming operation. |
 
 The engine supports:
@@ -51,6 +51,15 @@ The engine supports:
 - **Key derivation** — HKDF, PBKDF2, DH, AUTHENTICATED_DH
 - **Digest** — SHA-2-224, SHA-2-256, SHA-2-384, SHA-2-512, SHA-3-256, SHA-3-384, SHA-3-512
 - **Random number generation** — hardware RNG when available
+
+### Where the key comes from: two paths
+
+Every keyed operation (`begin`, `encrypt`, `decrypt`, `computeHmac`) takes its key one of two ways:
+
+- **Standalone — `CryptoConfig.keyData`.** The caller supplies the raw key material directly. No vault is involved. This is the WebCrypto `crypto.subtle` model and serves extractable / caller-held / ephemeral keys.
+- **Vault-managed — the `keyBlob` argument.** The caller passes the opaque, TEE-encrypted blob obtained from `IKeyVaultController.getKeyBlob(alias)`. The engine's TA unwraps it for the operation only; the plaintext key never enters the REE. This mirrors Android `KeyMint.begin(keyBlob, …)` — the KeyVault stores the blob at rest, the engine (TEE) runs the op.
+
+When `keyBlob` is non-null it takes precedence and `CryptoConfig.keyData` is ignored. The examples below use the standalone (`keyData`) path; substitute a `keyBlob` to operate on a vault key.
 
 ---
 
@@ -76,7 +85,7 @@ The engine supports:
 | `ICryptoEngineController.aidl` | Per-session controller: streaming and one-shot crypto operations |
 | `ICryptoOperation.aidl` | In-progress operation handle: update/finish/abort |
 | `CryptoConfig.aidl` | Parcelable: full configuration for a crypto operation |
-| `EngineCapabilities.aidl` | Parcelable: advertised algorithms, modes, and limits |
+| `EngineCapabilities.aidl` | Parcelable: advertised algorithms, block modes, padding modes, digests, EC curves, key derivations, key sizes, and limits |
 | `Algorithm.aidl` | Enum: AES, EC, HMAC, RSA, CHACHA20_POLY1305 |
 | `BlockMode.aidl` | Enum: CBC, CTR, GCM, ECB, KW |
 | `PaddingMode.aidl` | Enum: NONE, PKCS7, RSA_OAEP, RSA_PSS, RSA_PKCS1_V1_5 |
@@ -395,10 +404,12 @@ sequenceDiagram
 
 For small payloads, clients can skip the streaming model:
 
-- `encrypt(config, plaintext)` — equivalent to `begin(ENCRYPT) + finish(plaintext)`
-- `decrypt(config, ciphertext)` — equivalent to `begin(DECRYPT) + finish(ciphertext)`
-- `computeDigest(digest, data)` — stateless hash, no session required
-- `computeHmac(digest, key, data)` — stateless HMAC
+- `encrypt(config, plaintext, keyBlob)` — equivalent to `begin(ENCRYPT) + finish(plaintext)`
+- `decrypt(config, ciphertext, keyBlob)` — equivalent to `begin(DECRYPT) + finish(ciphertext)`
+- `computeDigest(digest, data)` — stateless hash, no key, no session required
+- `computeHmac(digest, key, data, keyBlob)` — stateless HMAC
+
+In the keyed one-shots, pass a `keyBlob` (from `IKeyVaultController.getKeyBlob`) to use a vault key, or leave it null and supply the key in `config.keyData` / the `key` argument for the standalone path.
 
 ---
 
@@ -406,7 +417,7 @@ For small payloads, clients can skip the streaming model:
 
 The CryptoEngine HAL does not emit asynchronous events. All operations are synchronous request/response over Binder.
 
-For asynchronous lifecycle events (deep sleep, key invalidation), see the [KeyVault HAL](../../keyvault/current/document.md) and its `IKeyVaultEventListener`.
+For asynchronous lifecycle events (deep sleep, key invalidation), see the [KeyVault HAL](../../keyvault/current/docs/keyvault.md) and its `IKeyVaultEventListener`.
 
 ---
 

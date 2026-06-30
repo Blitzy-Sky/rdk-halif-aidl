@@ -29,8 +29,12 @@ import com.rdk.hal.cryptoengine.KeyPurpose;
  *
  * Obtained via ICryptoEngine.open(). Provides raw cryptographic operations
  * independent of key storage. The engine operates on either:
- * - Caller-provided key material (via CryptoConfig.keyData)
- * - A vault-managed key (when attached to a KeyVault via the vault's begin())
+ * - Caller-provided key material (via CryptoConfig.keyData) — the methods on
+ *   this interface.
+ * - A vault-managed key — fetch the key's opaque blob from the KeyVault
+ *   (IKeyVaultController.getKeyBlob) and pass it as the keyBlob argument to
+ *   begin()/encrypt()/decrypt()/computeHmac(). The TA unwraps the blob and
+ *   operates inside the TEE; raw key material never leaves it.
  *
  * This separation ensures the crypto engine is composable — it can be
  * used standalone or attached to a vault as needed.
@@ -49,11 +53,12 @@ interface ICryptoEngineController {
     // -------------------------------------------------------------------------
 
     /**
-     * @brief Begin a crypto operation with caller-provided key material.
+     * @brief Begin a crypto operation on a vault key blob or caller-provided key material.
      *
      * Supports all algorithm/mode combinations advertised by the engine's
-     * EngineCapabilities. The key data and operation parameters are provided
-     * in the CryptoConfig. Returns an operation handle for streaming.
+     * EngineCapabilities. The key is the vault keyBlob when provided, otherwise
+     * the raw material in CryptoConfig.keyData. Returns an operation handle for
+     * streaming.
      *
      * Supported operation types:
      * - ENCRYPT / DECRYPT: AES-CBC, AES-CTR, AES-GCM, AES-ECB, ChaCha20-Poly1305, RSA-OAEP
@@ -69,13 +74,14 @@ interface ICryptoEngineController {
      * If config.iv is provided, it is used as-is and NOT prepended to the output.
      *
      * @param purpose The operation type.
-     * @param config Crypto configuration including algorithm, mode, key data, IV, AAD.
+     * @param config Crypto configuration including algorithm, mode, IV, AAD, and (for the standalone path) key data.
+     * @param keyBlob Opaque vault key blob from IKeyVaultController.getKeyBlob(). When non-null, config.keyData is ignored. When null, config.keyData supplies the key.
      * @returns ICryptoOperation handle for update/finish/abort.
-     * @exception binder::Status EX_ILLEGAL_ARGUMENT if config is invalid or algorithm not supported.
+     * @exception binder::Status EX_ILLEGAL_ARGUMENT if config is invalid, keyBlob is malformed, or algorithm not supported.
      * @exception binder::Status EX_ILLEGAL_STATE if max concurrent operations reached.
      * @exception binder::Status EX_UNSUPPORTED_OPERATION if the algorithm/mode combination is not supported by this engine.
      */
-    ICryptoOperation begin(in KeyPurpose purpose, in CryptoConfig config);
+    ICryptoOperation begin(in KeyPurpose purpose, in CryptoConfig config, in @nullable byte[] keyBlob);
 
     // -------------------------------------------------------------------------
     // One-shot digest operations
@@ -94,15 +100,16 @@ interface ICryptoEngineController {
     byte[] computeDigest(in Digest digest, in byte[] data);
 
     /**
-     * @brief Compute HMAC over data using a caller-provided key.
+     * @brief Compute HMAC over data using a vault key blob or a caller-provided key.
      *
      * @param digest The digest algorithm for the HMAC (e.g. SHA_2_256).
-     * @param key The HMAC key.
+     * @param key The raw HMAC key for the standalone path. Ignored (pass empty) when keyBlob is set.
      * @param data The data to authenticate.
+     * @param keyBlob Opaque vault key blob from IKeyVaultController.getKeyBlob(). When non-null, the key argument is ignored.
      * @returns HMAC value (length matches digest output size).
      * @exception binder::Status EX_UNSUPPORTED_OPERATION if the digest algorithm is not supported.
      */
-    byte[] computeHmac(in Digest digest, in byte[] key, in byte[] data);
+    byte[] computeHmac(in Digest digest, in byte[] key, in byte[] data, in @nullable byte[] keyBlob);
 
     // -------------------------------------------------------------------------
     // One-shot encrypt / decrypt
@@ -119,13 +126,14 @@ interface ICryptoEngineController {
      *   output = [IV] + [ciphertext] + [auth tag if GCM/Poly1305]
      * If config.iv is provided, the output is ciphertext only (no prepended IV).
      *
-     * @param config Crypto configuration (algorithm, mode, key, IV, AAD).
+     * @param config Crypto configuration (algorithm, mode, IV, AAD, and key for the standalone path).
      * @param plaintext Data to encrypt.
+     * @param keyBlob Opaque vault key blob from IKeyVaultController.getKeyBlob(). When non-null, config.keyData is ignored.
      * @returns Ciphertext. If IV was auto-generated, it is prepended.
      *          Auth tag is appended for GCM/Poly1305.
      * @exception binder::Status EX_ILLEGAL_ARGUMENT if config is invalid.
      */
-    byte[] encrypt(in CryptoConfig config, in byte[] plaintext);
+    byte[] encrypt(in CryptoConfig config, in byte[] plaintext, in @nullable byte[] keyBlob);
 
     /**
      * @brief One-shot decrypt for small payloads.
@@ -138,14 +146,15 @@ interface ICryptoEngineController {
      *   input = [IV] + [ciphertext] + [auth tag if GCM/Poly1305]
      * If config.iv is provided, the input is treated as ciphertext only.
      *
-     * @param config Crypto configuration (algorithm, mode, key, IV, AAD).
+     * @param config Crypto configuration (algorithm, mode, IV, AAD, and key for the standalone path).
      * @param ciphertext Data to decrypt. If IV was auto-generated on encrypt,
      *        it must be prepended to the ciphertext.
+     * @param keyBlob Opaque vault key blob from IKeyVaultController.getKeyBlob(). When non-null, config.keyData is ignored.
      * @returns Plaintext.
      * @exception binder::Status EX_ILLEGAL_ARGUMENT if config is invalid.
      * @exception binder::Status EX_SERVICE_SPECIFIC if auth tag verification fails.
      */
-    byte[] decrypt(in CryptoConfig config, in byte[] ciphertext);
+    byte[] decrypt(in CryptoConfig config, in byte[] ciphertext, in @nullable byte[] keyBlob);
 
     // -------------------------------------------------------------------------
     // Random number generation

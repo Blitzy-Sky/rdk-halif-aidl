@@ -28,8 +28,12 @@ import com.rdk.hal.cryptoengine.PaddingMode;
 /**
  * @brief Configuration for a crypto operation.
  *
- * Used with ICryptoEngineController.begin() when operating on
- * caller-provided key material (not vault-managed keys).
+ * Carries the algorithm and operation parameters for both paths:
+ * - Standalone: ICryptoEngineController.begin()/encrypt()/decrypt() with
+ *   caller-provided key material in keyData.
+ * - Vault-managed: the same methods with a keyBlob argument (from
+ *   IKeyVaultController.getKeyBlob); the key comes from the blob and keyData
+ *   is ignored.
  *
  * Describes the full set of parameters needed for any supported
  * crypto operation. Callers must explicitly set all fields relevant
@@ -52,7 +56,9 @@ parcelable CryptoConfig {
     PaddingMode paddingMode = PaddingMode.UNSET;
     /** Key size in bits (128, 192, 256 for AES; 2048, 3072, 4096 for RSA). 0 = not set. */
     int keySizeBits = 0;
-    /** Raw key material for standalone operations. Empty when using vault-managed keys. */
+    /** Raw key material for standalone operations. Empty for vault-managed-key
+     *  operations — there the key comes from the operation's keyBlob argument and
+     *  this field is ignored. A vault key is never referenced from inside this parcelable. */
     byte[] keyData = {};
     
     /** Initialization vector or nonce.

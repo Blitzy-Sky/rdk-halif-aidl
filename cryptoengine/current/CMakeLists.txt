@@ -28,6 +28,6 @@ set(INTERFACE_VERSION current)
 # 2. Trigger the Build
 # This function (from CMakeLists.inc) will:
 #   a. Run 'aidl_ops -g' to generate the C++ code
-#   b. Find the generated files in 'stable/generated/cryptoengine/src/current'
+#   b. Find the generated files module-locally in 'cryptoengine/current/{include,src}'
 #   c. Create the library target 'cryptoengine-vcurrent-cpp'
 target_build_interfaces_libraries()

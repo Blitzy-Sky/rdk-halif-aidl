@@ -21,6 +21,9 @@ package com.rdk.hal.cryptoengine;
 import com.rdk.hal.cryptoengine.Algorithm;
 import com.rdk.hal.cryptoengine.BlockMode;
 import com.rdk.hal.cryptoengine.Digest;
+import com.rdk.hal.cryptoengine.EcCurve;
+import com.rdk.hal.cryptoengine.KeyDerivation;
+import com.rdk.hal.cryptoengine.PaddingMode;
 import com.rdk.hal.cryptoengine.SecurityLevel;
 
 /**
@@ -39,9 +42,15 @@ parcelable EngineCapabilities {
     Algorithm[] algorithms = {};
     /** Supported block modes. */
     BlockMode[] blockModes = {};
+    /** Supported padding modes. */
+    PaddingMode[] paddingModes = {};
     /** Supported digests. */
     Digest[] digests = {};
-    /** Supported key sizes in bits. */
+    /** Supported elliptic curves. */
+    EcCurve[] ecCurves = {};
+    /** Supported key derivation functions. */
+    KeyDerivation[] keyDerivations = {};
+    /** Supported key sizes in bits (union across algorithms). */
     int[] keySizes = {};
     /** Maximum concurrent operations. */
     int maxConcurrentOperations = 0;
