@@ -18,14 +18,23 @@
  */
 package com.rdk.hal.keyvault;
 
+import com.rdk.hal.cryptoengine.Algorithm;
+import com.rdk.hal.cryptoengine.Digest;
+import com.rdk.hal.cryptoengine.KeyType;
 import com.rdk.hal.cryptoengine.SecurityLevel;
 
 /**
  * @brief Capabilities of a vault instance.
  *
- * Returned by getCapabilities() to allow callers to introspect
- * the vault's storage limits, security level, and persistence behaviour.
- * Crypto capabilities are queried from the attached crypto engine, not the vault.
+ * Returned by getCapabilities() to allow callers to introspect the vault's
+ * storage limits, security level, persistence behaviour, and what it can
+ * create/store. Not all SoC platforms support every algorithm, key type, or
+ * size; a caller should consult these fields before key creation, and any
+ * unsupported request is rejected with EX_UNSUPPORTED_OPERATION.
+ *
+ * These describe key creation and storage on the vault. The crypto operations
+ * available for a key are advertised separately by the CryptoEngine via
+ * EngineCapabilities.
  */
 @VintfStability
 parcelable VaultCapabilities {
@@ -37,6 +46,12 @@ parcelable VaultCapabilities {
     SecurityLevel securityLevel = SecurityLevel.SOFTWARE;
     /** Maximum number of keys this vault can hold. */
     int maxKeys = 0;
+    /** Algorithms this vault can generate/import/store (e.g. AES, EC, HMAC, RSA). */
+    Algorithm[] algorithms = {};
+    /** Key types this vault can store (SECRET, PUBLIC, PRIVATE). */
+    KeyType[] keyTypes = {};
+    /** Digests this vault can bind to a key (e.g. SHA_2_256), for HMAC/signature/KDF keys. */
+    Digest[] digests = {};
     /** Supported key sizes in bits. */
     int[] keySizes = {};
     /** Whether keys in this vault survive deep sleep. */

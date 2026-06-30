@@ -152,6 +152,7 @@ interface IKeyVaultController {
      * @param extractable Whether the raw key material can be exported.
      * @returns KeyDescriptor for the newly created key.
      * @exception binder::Status EX_ILLEGAL_ARGUMENT if alias already exists, algorithm/size is invalid, or usages are incompatible with algorithm.
+     * @exception binder::Status EX_UNSUPPORTED_OPERATION if the algorithm, key size, or digest is not supported by this vault (see VaultCapabilities).
      * @exception binder::Status EX_SERVICE_SPECIFIC if the vault has reached its key limit.
      */
     KeyDescriptor generateKey(in @utf8InCpp String alias, in Algorithm algorithm, in int keySizeBits, in int usages, in Digest digest, in boolean extractable);
@@ -178,6 +179,7 @@ interface IKeyVaultController {
      * @param extractable Whether the private key material can be exported. The public key is always exportable.
      * @returns KeyDescriptor[] — two descriptors: [0] = public, [1] = private.
      * @exception binder::Status EX_ILLEGAL_ARGUMENT if aliases already exist or params are invalid.
+     * @exception binder::Status EX_UNSUPPORTED_OPERATION if the algorithm or key size is not supported by this vault (see VaultCapabilities).
      * @exception binder::Status EX_SERVICE_SPECIFIC if the vault has reached its key limit.
      */
     KeyDescriptor[] generateKeyPair(in @utf8InCpp String publicAlias, in @utf8InCpp String privateAlias, in Algorithm algorithm, in int keySizeBits, in int usages, in boolean extractable);
@@ -197,6 +199,7 @@ interface IKeyVaultController {
      * @param extractable Whether the raw key material can be exported later.
      * @returns KeyDescriptor for the imported key.
      * @exception binder::Status EX_ILLEGAL_ARGUMENT if alias already exists, keyData is empty, or params are invalid.
+     * @exception binder::Status EX_UNSUPPORTED_OPERATION if the algorithm, key type, or digest is not supported by this vault (see VaultCapabilities).
      */
     KeyDescriptor importKey(in @utf8InCpp String alias, in Algorithm algorithm, in KeyType keyType, in byte[] keyData, in int usages, in Digest digest, in boolean extractable);
 
