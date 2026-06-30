@@ -132,6 +132,7 @@ interface ICryptoEngineController {
      * @returns Ciphertext. If IV was auto-generated, it is prepended.
      *          Auth tag is appended for GCM/Poly1305.
      * @exception binder::Status EX_ILLEGAL_ARGUMENT if config is invalid.
+     * @exception binder::Status EX_UNSUPPORTED_OPERATION if the algorithm/mode/padding is not supported by this engine (see EngineCapabilities).
      */
     byte[] encrypt(in CryptoConfig config, in byte[] plaintext, in @nullable byte[] keyBlob);
 
@@ -152,6 +153,7 @@ interface ICryptoEngineController {
      * @param keyBlob Opaque vault key blob from IKeyVaultController.getKeyBlob(). When non-null, config.keyData is ignored.
      * @returns Plaintext.
      * @exception binder::Status EX_ILLEGAL_ARGUMENT if config is invalid.
+     * @exception binder::Status EX_UNSUPPORTED_OPERATION if the algorithm/mode/padding is not supported by this engine (see EngineCapabilities).
      * @exception binder::Status EX_SERVICE_SPECIFIC if auth tag verification fails.
      */
     byte[] decrypt(in CryptoConfig config, in byte[] ciphertext, in @nullable byte[] keyBlob);

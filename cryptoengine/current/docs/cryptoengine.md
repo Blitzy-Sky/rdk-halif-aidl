@@ -74,6 +74,7 @@ When `keyBlob` is non-null it takes precedence and `CryptoConfig.keyData` is ign
 | HAL.CE.5 | `generateRandom()` shall use the platform hardware RNG when available. | Fallback to software CSPRNG is acceptable. |
 | HAL.CE.6 | GCM authentication tag verification failure shall return `EX_SERVICE_SPECIFIC`. | Must not return partial plaintext on tag failure. |
 | HAL.CE.7 | After `finish()` or `abort()`, the `ICryptoOperation` handle shall be invalidated. | Further calls to `update()`/`finish()` return `EX_ILLEGAL_STATE`. |
+| HAL.CE.8 | The engine shall advertise its supported algorithms, modes, paddings, digests, curves, and KDFs via `getCapabilities()`, and reject any unsupported operation. | Returns `EX_UNSUPPORTED_OPERATION`. Not all SoCs support all features. |
 
 ---
 
@@ -86,7 +87,7 @@ When `keyBlob` is non-null it takes precedence and `CryptoConfig.keyData` is ign
 | `ICryptoOperation.aidl` | In-progress operation handle: update/finish/abort |
 | `CryptoConfig.aidl` | Parcelable: full configuration for a crypto operation |
 | `EngineCapabilities.aidl` | Parcelable: advertised algorithms, block modes, padding modes, digests, EC curves, key derivations, key sizes, and limits |
-| `Algorithm.aidl` | Enum: AES, EC, HMAC, RSA, CHACHA20_POLY1305 |
+| `Algorithm.aidl` | Enum: AES, EC, HMAC, RSA, CHACHA20_POLY1305, CMAC |
 | `BlockMode.aidl` | Enum: CBC, CTR, GCM, ECB, KW |
 | `PaddingMode.aidl` | Enum: NONE, PKCS7, RSA_OAEP, RSA_PSS, RSA_PKCS1_V1_5 |
 | `Digest.aidl` | Enum: SHA-2 family, SHA-3 family |
