@@ -46,7 +46,7 @@ scope:
   - Cryptographically secure random number generation
   - Streaming operation model (begin/update/finish)
   - Hardware crypto acceleration when available
-  - CMAC and Concat KDF support for Widevine OEMCrypto
+  - CMAC and Concat KDF support for DRM key-ladder derivation
 
 # notes - Tracking metadata                                              [manual]
 #   priority      - Numeric priority (lower = higher)

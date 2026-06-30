@@ -66,8 +66,8 @@ keyvault:
       storageCapacityBytes: 131072    # 128 KB
       extractable: false
 
-    - name: "msl"
-      description: "Message Security Layer session keys"
+    - name: "app-session"
+      description: "App secure-messaging session keys (re-derived after sleep)"
       securityLevel: TEE
       maxKeys: 64
       supportedKeySizes: [128, 256]

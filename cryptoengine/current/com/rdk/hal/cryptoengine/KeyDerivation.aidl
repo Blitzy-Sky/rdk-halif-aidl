@@ -38,6 +38,6 @@ enum KeyDerivation {
     DH = 3,
     /** Concatenation KDF (NIST SP 800-56A Section 5.8.1). Used for ECDH key agreement and cert store derivation. */
     CONCAT_KDF = 4,
-    /** Counter-mode CMAC-AES-128 KDF (NIST SP 800-108). Required by Widevine OEMCrypto for key ladder derivation. */
+    /** Counter-mode CMAC-AES-128 KDF (NIST SP 800-108). Used for DRM key-ladder derivation. */
     CMAC_KDF = 5,
 }
