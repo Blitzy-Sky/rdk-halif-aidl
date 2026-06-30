@@ -250,14 +250,22 @@ interface IKeyVaultController {
     KeyDescriptor rotateKey(in @utf8InCpp String alias);
 
     /**
-     * @brief List all keys in this vault.
+     * @brief List the keys held in this vault.
      *
-     * @returns Array of KeyDescriptor for every key in the vault.
+     * Enumerates what keys exist — their aliases and metadata only. Raw key
+     * material is never returned by this call (or by any KeyDescriptor); a
+     * descriptor carries the alias, algorithm, type, size, usages,
+     * extractability, digest, version, and timestamps, and nothing more. To
+     * obtain raw bytes a caller must use exportKey() on an extractable key.
+     *
+     * @returns Array of KeyDescriptor for every key in the vault, one per alias.
      */
     KeyDescriptor[] listKeys();
 
     /**
      * @brief Get the descriptor for a specific key by alias.
+     *
+     * Returns metadata only — never raw key material (see listKeys()).
      *
      * @param alias The alias of the key to look up.
      * @returns KeyDescriptor, or null if not found.

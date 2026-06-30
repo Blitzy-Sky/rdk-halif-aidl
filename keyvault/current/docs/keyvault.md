@@ -21,6 +21,7 @@ Excluded: cryptographic operations themselves — these are the responsibility o
 ## Related Pages
 
 !!! tip "Related Pages"
+    - [Per-App Vaults — Secure Vault Usage](./per_app_vault_secure_usage.md) — the end-to-end per-app security model: identity gating, key derivation, and the app developer workflow
     - [CryptoEngine HAL](../../cryptoengine/current/docs/cryptoengine.md) — crypto operations; attached to a vault via `attachCryptoEngine()`
     - [HAL Interface Overview](../../key_concepts/hal/hal_interfaces.md)
     - [HAL Feature Profile](../../key_concepts/hal/hal_feature_profiles.md)
