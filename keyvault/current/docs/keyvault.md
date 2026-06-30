@@ -183,6 +183,8 @@ This means:
 
 - **KeyVault manages metadata and persistence.** It holds aliases, descriptors, and encrypted blobs. It reads and writes the encrypted keystore. It never performs crypto directly — it delegates to the attached CryptoEngine.
 - **Key lifecycle binds policy at creation.** `generateKey`, `importKey`, `importWrappedKey`, and `deriveIntoVault` live on the KeyVault, not the engine, so a key's `usages` and `extractable` policy are fixed where the key is stored. (Contrast WebCrypto, which places these verbs on the engine — `crypto.subtle` — because it has no vault.)
+- **Storage and operation are separate, like Android KeyMint.** The KeyVault is **at-rest storage** — it holds keys as opaque, OTP-wrapped blobs and never performs crypto itself. To use a key, fetch its **`keyBlob`** with `getKeyBlob(alias)` and pass it to a CryptoEngine operation (`begin`/`encrypt`/`decrypt`/`computeHmac`); the engine's TA unwraps the blob and operates. This mirrors Android's `KeyMint.begin(keyBlob, …)`, where Keystore stores the blob and KeyMint (the TEE) runs the op. The blob is device-bound ciphertext — safe to hold even for a non-extractable key.
+- **Two operation paths, both supported.** A *vault-managed* (non-extractable) key is used via its `keyBlob` as above. A *caller-held / extractable* key (the WebCrypto `crypto.subtle` model) is used directly on the CryptoEngine via `CryptoConfig.keyData`, with no vault involved. The `extractable` flag is the hinge: it governs whether `exportKey()` can ever yield plaintext to cross into the caller-held path.
 - **Two distinct HMACs.** The keystore-integrity HMAC the TA computes over a vault is an internal at-rest tamper check, keyed by the OTP root; it never surfaces to callers. An application HMAC is a separate key-usage operation performed by the CryptoEngine (`computeHmac`) under a vault key. Same primitive, different layers.
 - **CryptoEngine is the TEE gateway.** It is the only REE component that communicates with the TA. All key generation, encryption, decryption, signing, and derivation flow through the CryptoEngine to the TA.
 - **The TA is the security boundary.** Plaintext key material exists only in TEE-protected memory. The TA generates keys, encrypts blobs with OTP-derived vault keys, and performs all crypto operations.
@@ -192,184 +194,11 @@ This means:
 
 ---
 
-## Use Cases
+## Access control (caller identity)
 
-### Authenticated Key Exchange
+The HAL is **caller-agnostic** — it does not enforce per-app access control. Which application may open which vault is decided **above** the HAL by the RDK Crypto Service, on the caller's verified identity (AppArmor label + Binder UID), before the request reaches the HAL.
 
-**If you need to** establish session keys with a remote server via Diffie-Hellman:
-
-1. Open a TEE-backed vault
-2. `generateKeyPair()` — private key stays in vault, public key bytes returned
-3. Send public key to remote peer, receive their public key
-4. `deriveIntoVault()` — derive session keys (encryption, HMAC, wrapping) directly into vault
-5. Attach a crypto engine and use the derived keys for encrypted communication
-
-Key material never leaves the TEE. The caller only holds aliases and descriptors.
-
-```mermaid
-sequenceDiagram
-    participant App as Application
-    participant Ctrl as IKeyVaultController
-    participant CE as ICryptoEngineController
-
-    App->>Ctrl: generateKeyPair("dh-pub", "dh-priv", DH, 2048, DERIVE, false)
-    Ctrl-->>App: [pubDescriptor, privDescriptor]
-    App->>Ctrl: exportKey("dh-pub")
-    Ctrl-->>App: publicKeyBytes
-
-    Note over App: Exchange public keys with remote peer
-
-    App->>Ctrl: deriveIntoVault(config{kdf=...}, "dh-priv", peerPublicKey, outputSpecs[])
-    Ctrl-->>App: [encDescriptor, hmacDescriptor, ...]
-
-    App->>Ctrl: attachCryptoEngine(engine)
-    App->>CE: begin(ENCRYPT, config{keyAlias="session-enc"})
-    CE-->>App: ICryptoOperation
-```
-
-### Encrypted Persistent Storage
-
-**If you need to** store sensitive data (tokens, credentials, app state) encrypted on disk:
-
-1. Open a TEE-backed vault
-2. `generateKey()` — create a non-extractable AES key bound to the device
-3. Attach a crypto engine
-4. `encrypt()` data before writing to disk; `decrypt()` on read
-5. Key is device-bound — data cannot be decrypted on another device
-
-```mermaid
-sequenceDiagram
-    participant App as Application
-    participant Ctrl as IKeyVaultController
-    participant CE as ICryptoEngineController
-
-    App->>Ctrl: generateKey("storage-key", AES, 256, ENCRYPT|DECRYPT, false)
-    Ctrl-->>App: KeyDescriptor
-
-    App->>Ctrl: attachCryptoEngine(engine)
-
-    App->>CE: encrypt(config{keyAlias="storage-key", blockMode=CBC}, plaintext)
-    CE-->>App: ciphertext
-    Note over App: Write ciphertext to persistent storage
-
-    App->>CE: decrypt(config{keyAlias="storage-key", blockMode=CBC}, ciphertext)
-    CE-->>App: plaintext
-```
-
-### Device Identity and mTLS
-
-**If you need to** authenticate the device to a backend service using mutual TLS:
-
-1. Open the platform identity vault (contains factory-provisioned keypair)
-2. Export the public certificate (extractable) for the TLS handshake
-3. Attach a crypto engine for the private key signing operation
-4. The private key signs the TLS challenge inside the TEE — it never enters REE memory
-
-```mermaid
-sequenceDiagram
-    participant Svc as Service
-    participant Ctrl as IKeyVaultController
-    participant CE as ICryptoEngineController
-
-    Svc->>Ctrl: exportKey("device-cert-pub")
-    Ctrl-->>Svc: certificateBytes
-
-    Note over Svc: Present certificate in TLS handshake
-
-    Svc->>Ctrl: attachCryptoEngine(engine)
-    Svc->>CE: begin(SIGN, config{algorithm=EC, keyAlias="device-cert-priv"})
-    Note over CE: Private key signs challenge inside TEE
-```
-
-### Key Derivation (HKDF / PBKDF2)
-
-**If you need to** derive a new key from an existing secret (e.g. from a master key or password):
-
-1. Open a vault containing the base key
-2. `deriveIntoVault()` with the derivation config (HKDF with salt/info, or PBKDF2 with salt/iterations)
-3. The derived key is stored directly in the vault — raw material is never exposed
-
-```mermaid
-sequenceDiagram
-    participant App as Application
-    participant Ctrl as IKeyVaultController
-
-    App->>Ctrl: deriveIntoVault(config{kdf=HKDF, digest=SHA_2_256, salt=..., info=...}, "master-key", null, [derivedKeySpec])
-    Ctrl-->>App: [derivedKeyDescriptor]
-```
-
----
-
-## Vault Access Control
-
-The HAL is caller-agnostic — it does not enforce per-app access control. Access control is the responsibility of the RDK Crypto Service, which sits between applications and the HAL.
-
-### Two independent gates
-
-Vault security rests on two gates that are deliberately kept separate. The failure mode this design avoids is collapsing them — making an application's access depend on its holding a key.
-
-| Gate | Protects | Who holds the secret |
-|------|----------|----------------------|
-| **Data-at-rest key** — `KDF(OTP, vault_name)` | The keystore blobs on persistent storage: device-binding and per-vault isolation | Nobody in the REE. Re-derived inside the TEE on every boot; it never leaves the TEE. |
-| **Caller-access gate** — AppArmor label + Binder UID | *Which* application may open *which* vault | The RDK Crypto Service policy, kernel-enforced. |
-
-The data-at-rest key only protects bytes; it is never handed to a caller. Which application may use a vault is a separate, verified-identity decision made by the RDK Crypto Service. An application never holds a vault key — **access is by verified identity, not by possession of a wrapping key**. This keeps a compromised or misconfigured caller from reaching another vault even though all blobs derive from the same OTP root, and it means no per-vault secret has to be distributed to applications.
-
-### How App-to-Vault Isolation Works
-
-Each application runs in its own container or process. The RDK Crypto Service receives all vault requests via Binder IPC, identifies the caller, and checks whether that caller is permitted to access the requested vault. If not, the request is rejected before it reaches the HAL.
-
-```mermaid
-flowchart TD
-    A1[App A] -->|Binder IPC| Svc[RDK Crypto Service]
-    A2[App B] -->|Binder IPC| Svc
-    A3[Platform Service] -->|Binder IPC| Svc
-
-    Svc -->|1. Identify caller| ID[AppArmor label + Binder UID]
-    ID -->|2. Check policy| Policy[Vault Access Policy]
-    Policy -->|Allowed| HAL[KeyVault HAL]
-    Policy -->|Denied| Err[EX_SECURITY]
-
-    style Svc fill:#ff9f43,color:#fff
-    style HAL fill:#4a9eff,color:#fff
-    style Policy fill:#e74c3c,color:#fff
-```
-
-Isolation is enforced in two layers:
-
-**AppArmor (mandatory access control)** — each application has an AppArmor profile that confines what it can do. The RDK Crypto Service reads the caller's AppArmor label via `/proc/<pid>/attr/apparmor/current` and matches it against the vault access policy. This is a kernel-enforced boundary — the application cannot bypass or modify its own profile.
-
-**Binder caller UID (defence-in-depth)** — the RDK Crypto Service calls `getCallingUid()` on every request and checks it against a mapping of UID to permitted vault names. This catches misconfigured AppArmor profiles and provides a second verification of caller identity.
-
-Both checks must pass. If either fails, the service returns `EX_SECURITY` and the request never reaches the HAL.
-
-### Vault Access Policy
-
-The service maintains a vault access policy that maps caller identities to permitted vaults. This is a platform configuration file loaded at service startup.
-
-```yaml
-# /etc/rdk/crypto-service/vault-access.yaml
-vault-access:
-  - profile: "app-a"
-    vaults: ["app-a-storage"]
-
-  - profile: "app-b"
-    vaults: ["app-b-storage"]
-
-  - profile: "platform-service"
-    vaults: ["platform-identity", "drm-provisioning"]
-
-  # Default: no access to any vault
-```
-
-When an application calls `open(vaultName)`:
-
-1. Service reads the caller's AppArmor profile name
-2. Service looks up the profile in the vault access policy
-3. If the requested vault is in the allowed list, the request is forwarded to the HAL
-4. If not, `EX_SECURITY` is returned
-
-This is declarative, auditable, and updatable without changing the HAL or recompiling applications. The platform integrator defines the policy at build time; the service enforces it at runtime.
+The access-control model, the `vault-access.yaml` policy, per-app isolation, and end-to-end usage recipes are covered in the usage guide: [Per-App Vaults — Secure Vault Usage](./per_app_vault_secure_usage.md).
 
 ---
 
@@ -380,7 +209,7 @@ The KeyVault HAL has three layers:
 | Interface | Role |
 |-----------|------|
 | `IKeyVault` | Top-level manager. Enumerates vaults, opens sessions, creates/destroys runtime vaults. |
-| `IKeyVaultController` | Per-session controller. Key lifecycle (generate, import, export, delete, rotate), crypto engine attachment, and vault introspection. |
+| `IKeyVaultController` | Per-session controller. Key lifecycle (generate, import, export, delete, rotate), crypto engine attachment (for derive/wrap), `getKeyBlob()` to drive a CryptoEngine on a stored key, and vault introspection. |
 | `IKeyVaultEventListener` | Asynchronous callback interface for vault state changes, key expiry, and key invalidation. |
 
 ---
@@ -483,27 +312,24 @@ sequenceDiagram
     C->>KV: open("app-secure-storage", listener)
     KV-->>C: IKeyVaultController
 
-    C->>Ctrl: generateKey("session-key", AES, 256, ENCRYPT|DECRYPT, false)
+    C->>Ctrl: generateKey("session-key", AES, 256, ENCRYPT|DECRYPT, UNSET, false)
     Ctrl-->>C: KeyDescriptor
+    C->>Ctrl: getKeyBlob("session-key")
+    Ctrl-->>C: opaque keyBlob
 
-    C->>Ctrl: attachCryptoEngine(engine)
-
-    Note over CE,Ctrl: Engine now operates on vault keys
-
-    C->>CE: begin(ENCRYPT, config)
+    C->>CE: begin(ENCRYPT, config, keyBlob)
     CE-->>C: ICryptoOperation
     C->>Op: update(data)
     Op-->>C: ciphertext
     C->>Op: finish(null)
     Op-->>C: final ciphertext + tag
 
-    C->>Ctrl: detachCryptoEngine()
     C->>KV: close(controller)
 ```
 
 ### Key import and export
 
-- `importKey(alias, algorithm, keyType, keyData, usages, extractable)` — encrypts raw key material at rest using vault root-derived key
+- `importKey(alias, algorithm, keyType, keyData, usages, digest, extractable)` — encrypts raw key material at rest using vault root-derived key
 - `importWrappedKey(alias, algorithm, keyType, wrappedKeyData, wrappingKeyAlias, unwrapParams, usages, extractable)` — imports a key that is unwrapped only inside the secure environment, so plaintext never enters the REE. The secure path for provisioning an externally-generated key.
 - `exportKey(alias)` — returns raw key material only if `extractable == true`
 - `exportWrappedKey(alias, wrappingKeyAlias, wrapParams)` — wraps the key inside the TA under a vault wrapping key for secure migration, including non-extractable keys

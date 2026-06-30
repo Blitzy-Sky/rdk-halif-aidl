@@ -28,7 +28,7 @@ set(INTERFACE_VERSION current)
 # 2. Trigger the Build
 # This function (from CMakeLists.inc) will:
 #   a. Run 'aidl_ops -g' to generate the C++ code
-#   b. Find the generated files in 'stable/generated/keyvault/src/current'
+#   b. Find the generated files module-locally in 'keyvault/current/{include,src}'
 #   c. Create the library target 'keyvault-vcurrent-cpp'
 #   d. Resolve the 'cryptoengine' import declared in interface.yaml.
 target_build_interfaces_libraries()

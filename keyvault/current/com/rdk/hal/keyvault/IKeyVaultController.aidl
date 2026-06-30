@@ -36,11 +36,18 @@ import com.rdk.hal.keyvault.VaultState;
  * Obtained via IKeyVault.open(). Provides key storage, lifecycle,
  * and access control scoped to a single vault instance.
  *
- * The vault is purely a key store — it holds key material, manages
- * key metadata, and controls access. To perform crypto operations on
- * vault-managed keys, attach a configured ICryptoEngineController to
- * this vault. The engine then uses the vault's keys for its operations
- * based on its own crypto configuration.
+ * The vault is purely a key store — it holds key material encrypted at rest,
+ * manages key metadata, and controls access; it never performs crypto itself.
+ * To use a vault key, fetch its opaque, TEE-encrypted blob with getKeyBlob()
+ * and pass that blob to a CryptoEngine operation
+ * (ICryptoEngineController.begin()/encrypt()/etc.). The engine's TA unwraps the
+ * blob and operates inside the secure environment, so raw key material never
+ * leaves it. The blob is device-bound and opaque — safe to hold even for a
+ * non-extractable key, whose plaintext can never be exported.
+ *
+ * Callers holding their own (or exported, extractable) key material instead
+ * operate directly on the ICryptoEngineController using CryptoConfig.keyData,
+ * with no vault involved (the WebCrypto-style path).
  *
  * <h3>Exception Handling</h3>
  * Unless otherwise specified, this interface follows standard Android Binder semantics:
@@ -56,12 +63,14 @@ interface IKeyVaultController {
     // -------------------------------------------------------------------------
 
     /**
-     * @brief Attach a configured crypto engine to this vault.
+     * @brief Attach a configured crypto engine for the vault's own
+     *        crypto-requiring operations.
      *
-     * Once attached, the engine can operate on this vault's keys.
-     * The engine's crypto configuration (algorithm, mode, etc.) determines
-     * how the vault's keys are used — the vault itself has no opinion on
-     * crypto operations.
+     * The vault uses the attached engine to perform the key derivation and
+     * key wrapping that deriveIntoVault(), importWrappedKey(), and
+     * exportWrappedKey() require. Using a stored key for general crypto does
+     * NOT require attachment — fetch the key's blob with getKeyBlob() and pass
+     * it to any CryptoEngine operation.
      *
      * @param engine A configured ICryptoEngineController to attach.
      * @exception binder::Status EX_ILLEGAL_ARGUMENT if engine is null.
@@ -72,11 +81,36 @@ interface IKeyVaultController {
     /**
      * @brief Detach the currently attached crypto engine.
      *
-     * Any in-flight operations using vault keys are aborted.
+     * Any in-flight vault operations using the engine are aborted.
      *
      * @exception binder::Status EX_ILLEGAL_STATE if no engine is attached.
      */
     void detachCryptoEngine();
+
+    // -------------------------------------------------------------------------
+    // Using vault keys with a CryptoEngine
+    // -------------------------------------------------------------------------
+
+    /**
+     * @brief Get the opaque key blob for a stored key, to operate on it with a
+     *        CryptoEngine.
+     *
+     * Returns the key in its at-rest, TEE-encrypted form — a self-contained,
+     * device-bound blob that only the secure environment can unwrap. Pass it to
+     * ICryptoEngineController.begin()/encrypt()/decrypt()/computeHmac() as the
+     * keyBlob argument; the engine's TA unwraps it and operates without the
+     * plaintext key ever entering the REE.
+     *
+     * This is distinct from exportKey(): the blob is ciphertext and is returned
+     * even for a non-extractable key (that is the point — it is safe to hold),
+     * whereas exportKey() returns plaintext and is refused unless the key is
+     * extractable.
+     *
+     * @param alias The alias of the stored key.
+     * @returns The opaque, TEE-encrypted key blob.
+     * @exception binder::Status EX_ILLEGAL_ARGUMENT if alias does not exist.
+     */
+    byte[] getKeyBlob(in @utf8InCpp String alias);
 
     // -------------------------------------------------------------------------
     // Vault introspection
@@ -114,12 +148,13 @@ interface IKeyVaultController {
      * @param algorithm Algorithm for this key (AES, HMAC).
      * @param keySizeBits Key size in bits (e.g. 128, 256).
      * @param usages Allowed usages as a bitmask of KeyPurpose values.
+     * @param digest Digest bound to the key for HMAC/signature/KDF usage (e.g. SHA_2_256). Digest.UNSET when not applicable (e.g. AES).
      * @param extractable Whether the raw key material can be exported.
      * @returns KeyDescriptor for the newly created key.
      * @exception binder::Status EX_ILLEGAL_ARGUMENT if alias already exists, algorithm/size is invalid, or usages are incompatible with algorithm.
      * @exception binder::Status EX_SERVICE_SPECIFIC if the vault has reached its key limit.
      */
-    KeyDescriptor generateKey(in @utf8InCpp String alias, in Algorithm algorithm, in int keySizeBits, in int usages, in boolean extractable);
+    KeyDescriptor generateKey(in @utf8InCpp String alias, in Algorithm algorithm, in int keySizeBits, in int usages, in Digest digest, in boolean extractable);
 
     /**
      * @brief Generate an asymmetric keypair within this vault.
@@ -137,7 +172,7 @@ interface IKeyVaultController {
      *
      * @param publicAlias Alias for the public key in the vault.
      * @param privateAlias Alias for the private key in the vault.
-     * @param algorithm Algorithm for this keypair (EC, RSA, DH).
+     * @param algorithm Algorithm for this keypair (EC, RSA).
      * @param keySizeBits Key size in bits.
      * @param usages Allowed usages for the private key as a bitmask of KeyPurpose values.
      * @param extractable Whether the private key material can be exported. The public key is always exportable.
@@ -158,11 +193,12 @@ interface IKeyVaultController {
      * @param keyType Key type (SECRET, PUBLIC, or PRIVATE).
      * @param keyData Raw key material to import.
      * @param usages Allowed usages as a bitmask of KeyPurpose values.
+     * @param digest Digest bound to the key for HMAC/signature/KDF usage (e.g. SHA_2_256). Digest.UNSET when not applicable.
      * @param extractable Whether the raw key material can be exported later.
      * @returns KeyDescriptor for the imported key.
      * @exception binder::Status EX_ILLEGAL_ARGUMENT if alias already exists, keyData is empty, or params are invalid.
      */
-    KeyDescriptor importKey(in @utf8InCpp String alias, in Algorithm algorithm, in KeyType keyType, in byte[] keyData, in int usages, in boolean extractable);
+    KeyDescriptor importKey(in @utf8InCpp String alias, in Algorithm algorithm, in KeyType keyType, in byte[] keyData, in int usages, in Digest digest, in boolean extractable);
 
     /**
      * @brief Import a key in wrapped (encrypted) form, unwrapped only inside the secure environment.

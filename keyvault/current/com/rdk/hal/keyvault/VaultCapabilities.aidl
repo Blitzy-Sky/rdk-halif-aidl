@@ -41,6 +41,10 @@ parcelable VaultCapabilities {
     int[] keySizes = {};
     /** Whether keys in this vault survive deep sleep. */
     boolean persistsAcrossSleep = false;
+    /** Whether this vault's policy permits creating/importing extractable keys.
+     *  When false, generateKey/importKey with extractable=true are rejected and
+     *  exportKey is never permitted. */
+    boolean allowExtractableKeys = false;
     /** Total storage capacity in bytes for this vault's partition. */
     long storageCapacityBytes = 0;
     /** Current storage usage in bytes. */

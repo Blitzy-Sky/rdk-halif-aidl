@@ -71,8 +71,8 @@ sequenceDiagram
     alt caller IS the owning app
         Svc->>KV: open("app-a-storage")
         KV-->>App: IKeyVaultController (session)
-        App->>KV: generateKey("tok-key", AES, 256, ENCRYPT|DECRYPT, false)
-        App->>KV: attachCryptoEngine + encrypt(token) → ciphertext to disk
+        App->>KV: generateKey("tok-key", AES, 256, ENCRYPT|DECRYPT, UNSET, false)
+        App->>KV: getKeyBlob("tok-key") → CryptoEngine.encrypt(config, token, blob) → ciphertext to disk
         Note over TEE: token plaintext exists only inside the TEE
     else any other app
         Svc-->>App: EX_SECURITY — denied, never reaches the HAL
@@ -156,12 +156,14 @@ from the same OTP root.
 
 1. **Open** its vault — `open("app-a-storage")`. The RDK Crypto Service verifies
    identity and returns a controller; any other app gets `EX_SECURITY`.
-2. **Get a key** — `generateKey("tok-key", AES, 256, ENCRYPT|DECRYPT, false)`. The
-   key is created in the TEE and is non-extractable — it never leaves it.
-3. **Encrypt the token** — `attachCryptoEngine` then `encrypt(token)`; write the
-   ciphertext to the app's storage. The plaintext token exists only inside the
-   TEE during the operation.
-4. **Read back** — `decrypt(ciphertext)` on next use.
+2. **Get a key** — `generateKey("tok-key", AES, 256, ENCRYPT|DECRYPT, UNSET, false)`.
+   The key is created in the TEE and is non-extractable — it never leaves it.
+3. **Get its blob** — `getKeyBlob("tok-key")` returns the key in its opaque,
+   device-bound, TEE-encrypted form (safe to hold; it is not the key).
+4. **Encrypt the token** — `CryptoEngine.encrypt(config, token, keyBlob)`; write the
+   ciphertext to the app's storage. The TA unwraps the blob and encrypts inside the
+   TEE, so the plaintext token and key exist only there during the operation. Read
+   back with `decrypt(config, ciphertext, keyBlob)`.
 5. **(Stronger) bind it** — for tokens that must survive theft, keep a
    non-extractable **signing** key in the vault and present a sender-constrained
    credential (mTLS / DPoP) instead of a bearer token, so even a copied token is
@@ -205,10 +207,10 @@ lives in the vault.
   Diffie-Hellman), derives **HMAC / AES session keys**, and signs/MACs messages —
   all under keys that never leave the TEE. `deriveIntoVault()` produces the session
   keys directly inside the vault.
-- **Minimal case — device attestation (App B).** The app asks the vault to
-  **`computeHmac`** (or sign) a server-supplied challenge under a provisioned
-  **device key**, and sends the signature to its backend to prove the device is
-  genuine: one key, one signing op. Same shape, fewer moving parts.
+- **Minimal case — device attestation (App B).** The app fetches its device
+  key's blob (`getKeyBlob`) and asks the CryptoEngine to **`computeHmac`** (or
+  sign) a server-supplied challenge under it, then sends the result to its backend
+  to prove the device is genuine: one key, one op. Same shape, fewer moving parts.
 
 Both keep the device key in the TEE and return only the signature or the derived
 session-key descriptors — never raw key material.
@@ -486,7 +488,141 @@ So sideloading gives developers full, dynamic use of the vault model on **dev-mo
 hardware** — without ever exposing production vaults, DRM keys, or another app's
 identity.
 
-## 9. Design properties
+## 9. WebCrypto support: extractable keys and the two usage paths
+
+An app vault supports the **WebCrypto** (`crypto.subtle`) model directly — the
+KeyVault key lifecycle maps onto it almost one-for-one, and the `extractable`
+flag means the same thing in both:
+
+| WebCrypto (`crypto.subtle`) | App vault |
+|---|---|
+| `generateKey({extractable})` | `generateKey(alias, …, digest, extractable)` |
+| `importKey(raw, …, extractable)` | `importKey(alias, …, digest, extractable)` |
+| `exportKey(key)` (only if extractable) | `exportKey(alias)` (refused unless extractable) |
+| operate on a `CryptoKey` handle | operate via the key's **`keyBlob`** (handle) |
+| extractable raw key in JS memory | the **exported** raw key on the CryptoEngine `keyData` path |
+
+This gives an app **two usage paths**, chosen by the `extractable` flag:
+
+1. **Non-extractable (default, strongest).** The key stays in the vault. Use it by
+   fetching `getKeyBlob(alias)` and passing the opaque blob to a CryptoEngine
+   operation — the TA unwraps and operates, so the plaintext key never leaves the
+   TEE. This is a WebCrypto **non-extractable `CryptoKey`**: fully usable, never
+   exportable.
+2. **Extractable (only when the app genuinely needs the raw bytes).** `exportKey`
+   yields the material and the app operates on it via the CryptoEngine's
+   `CryptoConfig.keyData` path — no vault, no TEE binding. This *is* the plain
+   WebCrypto model for an extractable `CryptoKey` (or a purely software/ephemeral
+   key the app generates itself).
+
+The `extractable` flag is the hinge between the two; `VaultCapabilities`
+`allowExtractableKeys` tells an app whether a given vault permits the extractable
+path at all (a per-vault policy gate — a high-security vault sets it false).
+
+**Example — a downloadable HTML/JS app using WebCrypto.** Its
+`crypto.subtle.generateKey({name:"AES-GCM", extractable:false})` maps to a vault
+key used **only** via its `keyBlob` (device-bound, never leaves the box); the same
+call with `extractable:true` maps to a vault key the app may `exportKey` and then
+use as an ordinary raw `CryptoKey`. Either way the per-app vault and the identity
+gate (§3, §6) keep it isolated from every other app — WebCrypto semantics on top,
+device-bound key protection underneath.
+
+## 10. Use cases (API call recipes)
+
+Concrete call sequences against the KeyVault + CryptoEngine API. All use the
+A2 flow: `getKeyBlob(alias)` yields the opaque blob, which the CryptoEngine
+unwraps for the operation.
+
+### Authenticated key exchange
+
+**If you need to** establish session keys with a remote server via (EC) Diffie-Hellman:
+
+1. Open a TEE-backed vault.
+2. `generateKeyPair()` — private key stays in the vault, public key bytes returned.
+3. Send the public key to the remote peer, receive theirs.
+4. `deriveIntoVault()` — derive session keys (encryption, HMAC, wrapping) into the vault.
+5. `getKeyBlob()` for a session key and operate on the CryptoEngine.
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Ctrl as IKeyVaultController
+    participant CE as ICryptoEngineController
+
+    App->>Ctrl: generateKeyPair("ecdh-pub", "ecdh-priv", EC, 256, DERIVE_KEY, false)
+    Ctrl-->>App: [pubDescriptor, privDescriptor]
+    App->>Ctrl: exportKey("ecdh-pub")
+    Ctrl-->>App: publicKeyBytes
+
+    Note over App: Exchange public keys with remote peer
+
+    App->>Ctrl: deriveIntoVault(config{kdf=...}, "ecdh-priv", peerPublicKey, outputSpecs[])
+    Ctrl-->>App: [encDescriptor, hmacDescriptor, ...]
+
+    App->>Ctrl: getKeyBlob("session-enc")
+    Ctrl-->>App: opaque keyBlob
+    App->>CE: begin(ENCRYPT, config, keyBlob)
+    CE-->>App: ICryptoOperation
+```
+
+### Encrypted persistent storage
+
+**If you need to** store sensitive data (tokens, credentials, app state) encrypted on disk:
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Ctrl as IKeyVaultController
+    participant CE as ICryptoEngineController
+
+    App->>Ctrl: generateKey("storage-key", AES, 256, ENCRYPT|DECRYPT, UNSET, false)
+    Ctrl-->>App: KeyDescriptor
+    App->>Ctrl: getKeyBlob("storage-key")
+    Ctrl-->>App: opaque keyBlob
+
+    App->>CE: encrypt(config{blockMode=CBC}, plaintext, keyBlob)
+    CE-->>App: ciphertext
+    Note over App: Write ciphertext to persistent storage
+    App->>CE: decrypt(config{blockMode=CBC}, ciphertext, keyBlob)
+    CE-->>App: plaintext
+```
+
+The key is non-extractable and device-bound — the data cannot be decrypted on another device.
+
+### Device identity and mTLS
+
+**If you need to** authenticate the device to a backend using mutual TLS — the private key signs the challenge inside the TEE and never enters REE memory:
+
+```mermaid
+sequenceDiagram
+    participant Svc as Service
+    participant Ctrl as IKeyVaultController
+    participant CE as ICryptoEngineController
+
+    Svc->>Ctrl: exportKey("device-cert-pub")
+    Ctrl-->>Svc: certificateBytes
+    Note over Svc: Present certificate in TLS handshake
+    Svc->>Ctrl: getKeyBlob("device-cert-priv")
+    Ctrl-->>Svc: opaque keyBlob
+    Svc->>CE: begin(SIGN, config{algorithm=EC}, keyBlob) + finish(challenge)
+    CE-->>Svc: signature
+    Note over CE: Private key signs challenge inside TEE
+```
+
+### Key derivation (HKDF / PBKDF2)
+
+**If you need to** derive a new key from an existing secret — the derived key is stored directly in the vault, raw material never exposed:
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Ctrl as IKeyVaultController
+
+    App->>Ctrl: deriveIntoVault(config{kdf=HKDF, digest=SHA_2_256, salt=..., info=...}, "master-key", null, [derivedKeySpec])
+    Ctrl-->>App: [derivedKeyDescriptor]
+```
+
+## 11. Design properties
 
 | Concern | How the model provides it |
 |---|---|
