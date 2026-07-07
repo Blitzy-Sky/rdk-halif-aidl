@@ -91,13 +91,21 @@ parcelable InputBufferMetadata {
     long nsPresentationTime;
 
     /**
-     * Reserved for a future release. Clients MUST set this to false in v1.
+     * Marks this buffer as the first following a PTS discontinuity.
      *
-     * Use `IVideoDecoderController.signalDiscontinuity()` to signal a PTS
-     * discontinuity in v1. This field will become authoritative in a later
-     * release once migration is complete.
+     * When true, the PTS of this buffer is discontinuous with previously
+     * submitted buffers: the decoder MUST reset its PTS tracking and
+     * interpolation state before decoding this buffer, and MUST NOT
+     * interpolate timestamps across the discontinuity. Decoded output from
+     * this buffer onward reports the new timeline; the corresponding output
+     * frame carries `FrameMetadata.discontinuity = true`.
      *
-     * @see IVideoDecoderController.signalDiscontinuity()
+     * This is the sole discontinuity signal and is per-buffer in-band: it
+     * MAY be combined with `endOfStream` on the same buffer. `flush()` also
+     * resets PTS state; this flag covers in-band discontinuities without
+     * flushing queued data.
+     *
+     * @see FrameMetadata.discontinuity
      */
     boolean discontinuity;
 
