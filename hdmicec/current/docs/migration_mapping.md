@@ -115,7 +115,7 @@ The table is presented in three parts — methods, callbacks and data structures
 ### Method Mapping
 
 !!! info "Narrow screens — this table scrolls sideways"
-    On a phone-width viewport the five mandated columns cannot all fit, so **`Migration action`** and **`Risk`** sit beyond the right edge and this table scrolls horizontally inside its own region rather than being truncated. Swipe or drag the table sideways to reach them, or press <kbd>Tab</kbd> to step through the two cross-reference links those columns carry — focusing each link scrolls its column into view. Every column is present at every width, and print output restores all five side by side.
+    On a phone-width viewport the five mandated columns cannot all fit, so **`Risk`** sits beyond the right edge, **`Migration action`** is clipped by it, and this table scrolls horizontally inside its own region rather than being truncated. Swipe or drag the table sideways to reach them, or press <kbd>Tab</kbd> to step through the two cross-reference links those columns carry — the link in **`Risk`** starts wholly outside the region, so focusing it scrolls that column into view, while the link in **`Migration action`** starts partly visible and stays partly clipped, so scroll sideways to read it in full. Every column is present at every width, and print output restores all five side by side.
 
 | Existing plugin dependency | Old HAL concept | New AIDL HAL equivalent | Migration action | Risk |
 |---|---|---|---|---|
@@ -163,7 +163,7 @@ boolean addLogicalAddresses(
 ### Callback Mapping
 
 !!! info "Narrow screens — this table scrolls sideways"
-    On a phone-width viewport the five mandated columns cannot all fit, so **`Migration action`** and **`Risk`** sit beyond the right edge and this table scrolls horizontally inside its own region rather than being truncated. Swipe or drag the table sideways to reach them, or press <kbd>Tab</kbd> to step through the two cross-reference links those columns carry — focusing each link scrolls its column into view. Every column is present at every width, and print output restores all five side by side.
+    On a phone-width viewport the five mandated columns cannot all fit, so **`Risk`** sits beyond the right edge, **`Migration action`** is clipped by it, and this table scrolls horizontally inside its own region rather than being truncated. Swipe or drag the table sideways to reach them, or press <kbd>Tab</kbd> to step through the two cross-reference links those columns carry — the link in **`Risk`** starts wholly outside the region, so focusing it scrolls that column into view, while the link in **`Migration action`** starts partly visible and stays partly clipped, so scroll sideways to read it in full. Every column is present at every width, and print output restores all five side by side.
 
 | Existing plugin dependency | Old HAL concept | New AIDL HAL equivalent | Migration action | Risk |
 |---|---|---|---|---|
@@ -173,7 +173,7 @@ boolean addLogicalAddresses(
 ### Data Structure Mapping
 
 !!! info "Narrow screens — this table scrolls sideways"
-    On a phone-width viewport the five mandated columns cannot all fit, so **`Migration action`** and **`Risk`** sit beyond the right edge and this table scrolls horizontally inside its own region rather than being truncated. Swipe or drag the table sideways to reach them, or press <kbd>Tab</kbd> to step through the two cross-reference links those columns carry — focusing each link scrolls its column into view. Every column is present at every width, and print output restores all five side by side.
+    On a phone-width viewport the five mandated columns cannot all fit, so **`Risk`** sits beyond the right edge, **`Migration action`** is clipped by it, and this table scrolls horizontally inside its own region rather than being truncated. Swipe or drag the table sideways to reach them, or press <kbd>Tab</kbd> to step through the two cross-reference links those columns carry — the link in **`Risk`** starts wholly outside the region, so focusing it scrolls that column into view, while the link in **`Migration action`** starts partly visible and stays partly clipped, so scroll sideways to read it in full. Every column is present at every width, and print output restores all five side by side.
 
 | Existing plugin dependency | Old HAL concept | New AIDL HAL equivalent | Migration action | Risk |
 |---|---|---|---|---|
