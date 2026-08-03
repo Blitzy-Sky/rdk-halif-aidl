@@ -1,3 +1,7 @@
+---
+description: "Design and interface reference for the RDK HDMI-CEC AIDL HAL - IHdmiCec, IHdmiCecController and IHdmiCecEventListener - with its requirements, runtime flows and lifecycle."
+---
+
 # HDMI CEC
 
 ## References
@@ -14,6 +18,7 @@ The HDMI-CEC HAL provides low-level bus access for Consumer Electronics Control 
     |**HAL Interface Type**|[AIDL and Binder](../introduction/aidl_and_binder.md)|
     |**[1] High Definition Multimedia Specification 1.4b**|[Available from hdmi.org](https://www.hdmi.org/spec/hdmi1_4b)|
     |**[2] High Definition Multimedia Interface Specification 2.1**|[Available from hdmi.org](https://www.hdmi.org/spec/index)|
+    |**HDMI CEC Migration Mapping**|[migration_mapping.md](migration_mapping.md)|
 
 !!! info "Abbreviations"
     | Abbreviation | Description                                                                                               |
@@ -56,7 +61,7 @@ The HDMI-CEC HAL provides low-level bus access for Consumer Electronics Control 
 
 ## Interface Definitions
 
-The latest interface can be found by following this [hdmi cec link](https://github.com/rdkcentral/rdk-halif-aidl/tree/main/hdmi_cec)
+The latest interface can be found by following this [hdmi cec link](https://github.com/rdkcentral/rdk-halif-aidl/tree/main/hdmicec)
 
 | Interface                        | Description                                                                                                                             |
 | --------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
@@ -90,6 +95,8 @@ The HAL itself exposes the `IHdmiCec` and `IHdmiCecController` interfaces, with 
 
 ```mermaid
 flowchart TD
+    accTitle: HDMI CEC HAL component diagram
+    accDescr: The RDK Controller Client and the RDK CEC Watcher Client sit in middleware. The Controller Client calls open and close on the IHdmiCEC HAL, and calls addLogicalAddress, removeLogicalAddress and sendMessage on IHdmiCECController. The Watcher Client calls getState, getProperty, getLogicalAddresses, registerEventListener and unregisterEventListener on IHdmiCEC. IHdmiCecEventListener delivers onMessageReceived, OnStateChanged and OnMessageSent to both the Watcher Client and the Controller Client.
     subgraph TopRow[ Middleware ]
         CECControllerClient("RDK Controller Client")
         CECWatcherClient("RDK CEC Watcher Client")
@@ -131,19 +138,22 @@ Key points from the component diagram:
 #### Client Controller
 
 ```mermaid
+%%{init: {"themeVariables":{"signalColor":"#838383"}}}%%
 sequenceDiagram
+    accTitle: Controller Client runtime interaction with the CEC HAL
+    accDescr: The middleware Client calls open on IHdmiCec. The controller reports onStateChanged with state STARTED. The Client then calls addLogicalAddress with 0x01 and sendMessage with a frame on iHdmiCecController, which returns the send result with the ACK state. Finally the Client calls close on IHdmiCec.
     %% --- MW Client ---
-    box rgb(30,136,229) MW Client
+    box transparent MW Client
         participant MW as Client
     end
 
     %% --- HAL ---
-    box rgb(249,168,37) HAL
+    box transparent HAL
       participant HAL as IHdmiCec
     end
 
     %% --- MW Controller ---
-    box rgb(30,136,229) HDMI_CEC Controller
+    box transparent HDMI_CEC Controller
         participant HDC as iHdmiCecController
     end
 
@@ -167,14 +177,17 @@ sequenceDiagram
 #### Watcher Client
 
 ```mermaid
+%%{init: {"themeVariables":{"signalColor":"#838383"}}}%%
 sequenceDiagram
+    accTitle: Watcher Client runtime interaction with the CEC HAL
+    accDescr: The optional middleware Watcher Client calls registerEventListener on IHdmiCec. The HAL then delivers onStateChanged with state STARTED, onMessageSent with the transmit result, and onMessageReceived with a received frame.
     %% --- MW Watcher Client ---
-    box rgb(67,160,71) MW Watcher Client
+    box transparent MW Watcher Client
       participant W as Watcher Client (optional)
     end
 
     %% --- HAL ---
-    box rgb(249,168,37) HAL
+    box transparent HAL
       participant HAL as IHdmiCec
     end
 
