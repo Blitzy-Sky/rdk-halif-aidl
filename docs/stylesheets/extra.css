@@ -8,27 +8,223 @@
     font-size: .75rem;
 }
 
-/* Enforce Mermaid colors in MkDocs */
-.mermaid .actor {
-    fill: #1E88E5 !important;
-    stroke: #0D47A1 !important;
-    color: white !important;
+/* ------------------------------------------------------------------------- *
+ * Mermaid
+ *
+ * This file used to carry four `!important` overrides for `.mermaid .actor`,
+ * `.mermaid .participant`, `.mermaid .messageLine0` and `.mermaid .note`. They
+ * were dead code and were removed: Material for MkDocs renders every diagram
+ * into a CLOSED shadow root, which a page stylesheet cannot reach, so the rules
+ * never applied to a single diagram - verified at runtime (actors and notes
+ * rendered in the theme's own colours, never in the colours declared here).
+ *
+ * Diagram colour is therefore set where it does take effect: in the diagram
+ * source, via the `%%{init: {...}}%%` directive, and by the theme's own
+ * palette-reactive `--md-mermaid-*` custom properties. Do not reintroduce
+ * `.mermaid` descendant rules here.
+ *
+ * What a page stylesheet CAN control is the box the diagram is rendered into,
+ * which is what the rules below do.
+ * ------------------------------------------------------------------------- */
+
+/* Reserve the diagram's box before the diagram is drawn.
+ *
+ * A diagram arrives up to a second after the page does, replacing a short block
+ * of source text with a much taller picture. That late growth reflows
+ * everything below it, which both costs layout shift and moves the anchor the
+ * reader deep-linked to out from under them.
+ *
+ * The theme renders each diagram at `width: 100%` with `max-width` set to its
+ * intrinsic width, so the picture scales with the column and its height is
+ * always `column-width / intrinsic-aspect-ratio`. A fixed pixel height can
+ * therefore only ever be correct at one viewport width - too small elsewhere,
+ * or (worse) hundreds of pixels of dead space on a phone. Reserving the
+ * *aspect ratio* instead is exact at every width, so there is nothing to
+ * reflow on load and nothing to reflow on resize.
+ *
+ * Each diagram declares its own ratio as `--cec-diagram-ar`: its intrinsic
+ * width divided by its intrinsic height, ROUNDED DOWN, which is the safe
+ * direction. Rounding down reserves a box a fraction of a pixel taller than the
+ * picture, which shows as a hairline of dead space and shifts nothing. Rounding
+ * up fails silently rather than visibly: because the automatic minimum size in
+ * the ratio-dependent axis is content-based, an under-reserved box does not
+ * overflow or clip - it simply grows to the picture on render, which is the
+ * layout shift this rule exists to prevent. Measured, then rounded down:
+ * 891.6875/210.95 = 4.227 -> 4.22, 1591/747 = 2.1299 -> 2.12,
+ * 2031/719 = 2.8248 -> 2.82. Re-measure the viewBox if a diagram is edited.
+ * Browsers without `aspect-ratio` fall back to content height, which is the
+ * pre-existing behaviour.
+ *
+ * The host element's own `margin: 1em 0` and inline-baseline gap are removed so
+ * the reserved ratio describes the picture exactly, and the equivalent spacing
+ * is applied to the wrapper instead. */
+.cec-diagram {
+    aspect-ratio: var(--cec-diagram-ar, auto);
+    margin: 1em 0;
 }
 
-.mermaid .participant {
-    fill: #F9A825 !important; 
-    stroke: #F57F17 !important;
-    color: black !important;
+.cec-diagram > div.mermaid {
+    display: flex;
+    margin: 0;
 }
 
-.mermaid .messageLine0 {
-    stroke: #F57C00 !important; /* Ensures arrows stay visible */
-    stroke-width: 2px !important;
+/* Do not flash the raw diagram source into the reserved box during the render
+ * window. javascript/mermaid-init.js marks each pending block, because the
+ * theme strips the `mermaid` class the moment it takes ownership of a block -
+ * which it does whether or not the runtime ever arrives - so the class alone
+ * cannot identify a block that is still waiting. The mark is removed when the
+ * fallback below is built, which is what makes the source visible again.
+ *
+ * A block that has already become a fallback is excluded outright. The theme
+ * restores the `mermaid` class when it re-mounts content during an in-page
+ * navigation, and without this exclusion that would re-hide a source listing
+ * the fallback has already announced - a notice reading "followed by its
+ * source" above an empty box, with the named region gone from the
+ * accessibility tree. The exclusion holds however often the class returns. */
+.cec-diagram > pre.mermaid:not([data-rdk-mermaid-fallback]),
+.cec-diagram > pre[data-rdk-mermaid-pending]:not([data-rdk-mermaid-fallback]) {
+    visibility: hidden;
+    height: 0;
+    margin: 0;
+    overflow: hidden;
 }
 
-.mermaid .note {
-    fill: #43A047 !important; 
-    stroke: #1B5E20 !important;
-    color: white !important;
+/* Accessible fallback shown by javascript/mermaid-init.js when the diagram
+ * runtime is unavailable, so that a reader is told what happened instead of
+ * being left with unexplained monospace source. The reserved ratio is released:
+ * the fallback is prose plus a source listing, not a picture. */
+.rdk-mermaid-fallback {
+    aspect-ratio: auto;
+    border-left: .2rem solid #B3261E;
+    padding-left: .8rem;
 }
 
+.rdk-mermaid-fallback__notice {
+    font-weight: 700;
+}
+
+.rdk-mermaid-fallback > pre[role="region"] {
+    max-height: 20rem;
+    overflow: auto;
+}
+
+[data-md-color-scheme="slate"] .rdk-mermaid-fallback {
+    border-left-color: #F2B8B5;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Search: unavailable-index notice
+ *
+ * When the client-side search index cannot be loaded the theme leaves the
+ * result panel on "Initializing search" forever. javascript/a11y.js replaces
+ * that string with an announced error and tags it with this class, which needs
+ * an error treatment so the message does not read as ordinary secondary text.
+ * ------------------------------------------------------------------------- */
+.md-search-result__meta.rdk-search-error {
+    color: var(--md-typeset-color);
+    background-color: var(--md-default-bg-color);
+    border-left: .2rem solid #B3261E;
+    font-weight: 700;
+    line-height: 1.5;
+    padding: .6rem .8rem;
+    white-space: normal;
+    height: auto;
+}
+
+[data-md-color-scheme="slate"] .md-search-result__meta.rdk-search-error {
+    border-left-color: #F2B8B5;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Text contrast: two theme tokens that land just under 4.5:1
+ *
+ * Both defaults miss WCAG 2.1 AA 1.4.3 by a hair's breadth at the sizes this
+ * site renders them, so each is nudged to a value with real headroom rather
+ * than one that sits on the threshold.
+ *
+ * Code comments: the theme derives `--md-code-hl-comment-color` from
+ * `--md-default-fg-color--light`, i.e. `rgba(0, 0, 0, .54)`, which composites
+ * to #717171 over the #f5f5f5 code background - 4.48:1 at 12.75px. Every
+ * `path:line` citation in the mapping tables' code snippets is a comment, so
+ * the deficit applies to the page's most-repeated annotation. #6E6E6E scores
+ * 4.68:1. The slate scheme composites to #90919A over #272935 (4.61:1) and
+ * already passes, so it is deliberately left alone.
+ * ------------------------------------------------------------------------- */
+[data-md-color-scheme="default"] {
+    --md-code-hl-comment-color: #6E6E6E;
+}
+
+/*
+ * Footer copyright: `#ffffff73` (alpha .45) composites to #7f7f7f over the
+ * footer meta bar and measures 4.48-4.52:1 depending on rounding - a coin flip
+ * against the 4.5:1 requirement. Alpha .55 composites to #969696 for 6.12:1 in
+ * the default scheme and 5.7:1 in slate, which defines no footer foreground of
+ * its own and therefore inherits this value.
+ *
+ * The selector list mirrors the theme's own: `main.css` declares this token on
+ * `:root, [data-md-color-scheme="default"]`, and because `<body>` carries
+ * `data-md-color-scheme="default"` that second selector puts the theme's value
+ * on the body element itself. A custom property declared on a descendant always
+ * beats one inherited from `:root`, whatever the specificity or source order, so
+ * overriding `:root` alone leaves the entire footer subtree still reading the
+ * theme's value. The slate scheme declares no footer foreground of its own and
+ * so inherits the `:root` half of this rule.
+ */
+:root,
+[data-md-color-scheme="default"] {
+    --md-footer-fg-color--lighter: #ffffff8c;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Links in body text need a non-colour distinction
+ *
+ * The theme paints links in the primary colour (#4051b5) inside body text of
+ * `rgba(0, 0, 0, .87)` (#212121). That is 6.86:1 against the page - perfectly
+ * legible - but only 2.34:1 against the surrounding prose, below the 3:1 that
+ * WCAG 2.1 AA 1.4.1 (Use of Colour) requires before colour may be the sole
+ * distinguishing signal. Rather than repaint the brand colour, links inside the
+ * article body carry an underline, which is a non-colour distinction and works
+ * for readers who cannot perceive the hue difference at all.
+ *
+ * Scoped to the article so the header, navigation, table of contents, footer
+ * and search results - all of which are self-evidently link surfaces - keep the
+ * theme's undecorated treatment.
+ * ------------------------------------------------------------------------- */
+.md-content__inner a {
+    text-decoration: underline;
+    text-underline-offset: .15em;
+    text-decoration-thickness: from-font;
+}
+
+.md-content__inner a:focus,
+.md-content__inner a:hover {
+    text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------------- *
+ * Pointer target size
+ *
+ * Navigation rows render 18.2px tall with 8.75px between them, so neither the
+ * 24px minimum nor the spacing exception of WCAG 2.2 AA 2.5.8 is met. A minimum
+ * box height of 24px satisfies the rule outright for every row in the primary
+ * navigation, the table of contents and the drawer at once. The existing
+ * `margin-top` keeps the rows visually separated, so nothing else moves.
+ * ------------------------------------------------------------------------- */
+.md-nav__link {
+    min-height: 24px;
+}
+
+/* ------------------------------------------------------------------------- *
+ * The auto-hiding header must reappear when it takes focus
+ *
+ * `features: header.autohide` hides the header by translating it out of the
+ * viewport - `.md-header[hidden] { transform: translateY(-100%) }` - while
+ * leaving it rendered, and therefore leaving the logo and the search field
+ * focusable. Tabbing into a header in that state moves focus, and the caret, to
+ * something drawn 44px above the top of the screen. Revealing the header
+ * whenever it contains focus keeps every header control perceivable at the
+ * moment it becomes active, which is what WCAG 2.1 AA 2.4.7 requires.
+ * ------------------------------------------------------------------------- */
+.md-header[hidden]:focus-within {
+    transform: none;
+}

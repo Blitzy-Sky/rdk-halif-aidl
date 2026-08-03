@@ -1,3 +1,7 @@
+---
+description: "Maps the legacy C HDMI-CEC HAL onto the AIDL HAL - methods, callbacks and data structures - and shows that Thunder plugin API behaviour is preserved at the ccec seam."
+---
+
 # HDMI CEC — Legacy C HAL to AIDL HAL Migration Mapping
 
 ## Overview
@@ -66,17 +70,17 @@ Four layers sit between a JSON-RPC caller and the CEC bus, and only the third on
 
 The blast radius is therefore narrow in the dimension that matters — **the behavioural boundary stays inside the `ccec` adapter, so layers 1 and 2 are untouched** — but it is not a ten-expression edit. `DriverImpl` gains new members, a new listener type implementing three callbacks, new includes and new build linkage, while its published `Driver` overrides [`DriverImpl.hpp:L67-L79`] keep their exact signatures.
 
-<div class="cec-diagram" data-search-exclude markdown="1">
+<div class="cec-diagram" data-search-exclude markdown="1" style="--cec-diagram-ar:4.22">
 
 ```mermaid
-%%{init: {"theme":"default","htmlLabels":false,"themeVariables":{"textColor":"#000000","clusterBkg":"#FFFFFF","clusterBorder":"#616161","lineColor":"#212121"},"flowchart":{"htmlLabels":false,"nodeSpacing":16,"rankSpacing":40,"padding":8,"subGraphTitleMargin":{"top":0,"bottom":30},"diagramPadding":4}}}%%
-flowchart TD
+%%{init: {"htmlLabels":false,"flowchart":{"htmlLabels":false,"nodeSpacing":18,"rankSpacing":56,"padding":10,"diagramPadding":8}}}%%
+flowchart LR
     accTitle: Before and after the DriverImpl seam re-point
     accDescr: The five Thunder CEC plugins call the ccec public contract of Connection, LibCCEC and Driver, which calls DriverImpl, the seam. DriverImpl binds to the legacy C HAL hdmi_cec_driver.h today, drawn as a solid edge labelled before, and binds to the AIDL HAL interfaces IHdmiCec and IHdmiCecController after migration, drawn as a dotted edge labelled after, re-pointed. Only that one binding changes: the plugin layer and the ccec contract layer are untouched.
-    subgraph PLUGINS["Thunder CEC plugins<br/>(unchanged)"]
+    subgraph PLUGINS["Thunder CEC plugins (unchanged)"]
         P["HdmiCec<br/>HdmiCecSink<br/>HdmiCec_2<br/>HdmiCecSource<br/>entservices<br/>HdmiCecSource"]
     end
-    subgraph CCEC["ccec middleware<br/>(contract unchanged)"]
+    subgraph CCEC["ccec middleware (contract unchanged)"]
         CONN["Connection<br/>LibCCEC<br/>Driver"]
         DRV["DriverImpl<br/>(the seam)"]
     end
@@ -90,19 +94,16 @@ flowchart TD
     classDef seam fill:#616161,stroke:#212121,stroke-width:2px,color:#FFFFFF;
     classDef legacy fill:#BDBDBD,stroke:#424242,stroke-width:2px,color:#000000;
     classDef aidl fill:#F9A825,stroke:#E65100,stroke-width:2px,color:#000000;
-    classDef group fill:#FFFFFF,stroke:#616161,stroke-width:1px,color:#000000;
     P:::plugin
     CONN:::mw
     DRV:::seam
     OLD:::legacy
     NEW:::aidl
-    PLUGINS:::group
-    CCEC:::group
 ```
 
 </div>
 
-The solid edge is the binding in force today and the dotted edge is the re-pointed binding, so the two HAL nodes carry the *before* and *after: re-pointed* labels directly. Colour is semantic and follows the convention of the CEC design document's own diagrams [`hdmi_cec.md:L91-L120`]: blue for the Thunder plugins, green for the `ccec` middleware, grey for the seam and for the legacy C HAL, and orange for the AIDL HAL. The same palette is reused by the transmit and receive sequence diagrams below, where it groups the lifelines by layer.
+The solid edge is the binding in force today and the dotted edge is the re-pointed binding, so the two HAL nodes carry the *before* and *after: re-pointed* labels directly. Node colour is semantic and follows the convention of the CEC design document's own diagrams [`hdmi_cec.md:L91-L120`]: blue for the Thunder plugins, green for the `ccec` middleware, grey for the seam and for the legacy C HAL, and orange for the AIDL HAL. Each node fill is paired with an explicit label colour so it reads identically in the light and dark site palettes, and everything the site theme owns — edges, cluster panels and cluster titles — is left to the theme so that it follows the reader's palette rather than fighting it. The one exception is the arrow markers, which the theme's own stylesheet no longer reaches because Mermaid 11 scopes marker ids per diagram; they are pinned to a single mid-grey that clears the 3:1 non-text contrast minimum against both the light and the dark page surface. The transmit and receive sequence diagrams below group their lifelines by the same three layers, using named groups rather than fixed fills for the same reason.
 
 The single most consequential structural difference is *where the HAL boundary sits*. The legacy HAL was a linked shared library, `libRCECHal.so` [`hdmi-cec_halSpec.md:L140`], called in-process through function pointers and an opaque `int` handle [`hdmi_cec_driver.h:L146`]; its process model was stated as "This interface is required to support a single instantiation with a single process" [`hdmi-cec_halSpec.md:L83`]. The AIDL HAL is reached through object references across a **process boundary**, which the contract itself makes explicit in two places: a second `open()` fails "by this or another process" [`IHdmiCec.aidl:L93`], and "If the client that opened the `IHdmiCecController` crashes, then close() is implicitly called to perform clean up" [`IHdmiCec.aidl:L100-L101`] — both statements only have meaning across separate processes. Android's HAL guidance is the wider basis for that model (see *External references*). Registration, lifetime and error reporting all change shape as a result, and those three shape changes account for most of the risk recorded below.
 
@@ -143,7 +144,7 @@ SendMessageStatus sendMessage(
     in byte[] message);
 ```
 
-The legacy call reports two things — a call-level `HDMI_CEC_STATUS` return and a bus-level `int *result` out-parameter whose values are "valid only for directly addressed messages" [`hdmi_cec_driver.h:L374-L377`]. The AIDL call reports one: a `SendMessageStatus` return, with call-level failures raised as Binder exceptions instead [`IHdmiCec.aidl:L32-L37`]. The seam must fold two channels into one without losing the directed-versus-broadcast distinction; see the cross-walk and its warning below.
+The legacy call reports two things — a call-level `HDMI_CEC_STATUS` return and a bus-level `int *result` out-parameter whose values are "valid only for directly addressed messages" [`hdmi_cec_driver.h:L374-L377`]. The AIDL call reports one: a `SendMessageStatus` return, with call-level failures raised as Binder exceptions instead [`IHdmiCec.aidl:L32-L37`]. The seam must fold two channels into one without losing the directed-versus-broadcast distinction; see the [status-code cross-walk](#status-code-cross-walk) and, in particular, [The ACK_STATE inversion](#the-ack_state-inversion).
 
 Signature contrast for address management:
 
@@ -290,6 +291,8 @@ Reading the enum only covers one direction. Three lifecycle outcomes are reachab
 The common shape of all three is that AIDL moves part of the lifecycle failure reporting out of an error *code* and into the *return value*, where it is easy to drop. Binding them costs three lines at the seam and is the difference between preserving the ccec contract and quietly weakening it.
 
 Three structural notes on the collapse. First, the legacy API split its reporting between a return value and, for transmit only, an out-parameter whose values are "valid only for directly addressed messages" [`hdmi_cec_driver.h:L374-L377`]; AIDL splits it three ways — the return value, the nullability of that return value [`IHdmiCec.aidl:L114`] and the Binder exception channel [`IHdmiCec.aidl:L34-L36`] — which is why the lifecycle table above exists alongside the enum tables. Second, several legacy codes were already dead letters, so the collapse loses less real signal than the raw fifteen-enumerator count suggests: `HDMI_CEC_IO_ALREADY_REMOVED` [`hdmi_cec_driver.h:L86`] and `HDMI_CEC_IO_GENERAL_ERROR` [`hdmi_cec_driver.h:L84`] are declared but documented as the retval of no function, and the adapter discards the status of three calls outright [`DriverImpl.cpp:L296,L308,L325`]. Third, the adapter already collapses *every* non-success open code into a single `IOException` [`DriverImpl.cpp:L120-L121`], so reproducing that one exception is sufficient for preservation; refining it into distinct exceptions would be an API change rather than a migration.
+
+### The ACK_STATE inversion
 
 !!! warning "The ACK_STATE_* inversion — the single most error-prone part of this migration"
     The meaning of `ACK_STATE_0` and `ACK_STATE_1` **inverts** between directed and broadcast messages, per HDMI 1.4b Section CEC 6.1.2 "ACK (Acknowledge)" [`SendMessageStatus.aidl:L35-L36`]:
@@ -511,37 +514,35 @@ Several properties the plugins rely on are not merely unbroken by the migration;
 
 ### Transmit path — unchanged above the seam
 
-<div class="cec-diagram" data-search-exclude markdown="1">
+<div class="cec-diagram" data-search-exclude markdown="1" style="--cec-diagram-ar:2.12">
 
 ```mermaid
-%%{init: {"theme":"default","themeVariables":{"textColor":"#000000","actorBkg":"#ECECFF","actorBorder":"#212121","actorTextColor":"#000000","actorLineColor":"#212121","signalColor":"#212121","signalTextColor":"#000000","noteBkgColor":"#FFF3E0","noteBorderColor":"#E65100","noteTextColor":"#000000"},"sequence":{"diagramMarginX":8,"diagramMarginY":8,"actorMargin":12,"boxMargin":8,"width":70,"noteMargin":6,"messageMargin":28,"mirrorActors":false}}}%%
+%%{init: {"themeVariables":{"signalColor":"#838383"},"sequence":{"diagramMarginX":32,"diagramMarginY":24,"actorMargin":120,"boxMargin":14,"boxTextMargin":6,"width":150,"noteMargin":12,"messageMargin":44,"mirrorActors":false,"wrap":false}}}%%
 sequenceDiagram
     accTitle: Transmit path, unchanged above the ccec seam
     accDescr: A Thunder plugin calls Connection send or sendTo, Connection calls Bus send, Bus calls Driver write with a CECFrame, and only then does DriverImpl, the seam, call sendMessage on IHdmiCecController and receive a SendMessageStatus. Coming back up, the seam either returns or throws CECNoAckException or IOException; that exception drives the Bus resend loop, and Bus returns or re-throws only once the timeout divided by 250 attempts at 250 millisecond intervals are exhausted. The plain send and sendTo overloads swallow the exception, so only the Throw underscore e overloads propagate it to the plugin. Every hop above the seam is unchanged by the migration.
-    box rgb(30,136,229) Thunder plugin
-        participant PL as Thunder<br/>plugin
+    box transparent Thunder plugin
+        participant PL as Thunder plugin
     end
-    box rgb(67,160,71) ccec middleware
+    box transparent ccec middleware
         participant CN as Connection
         participant BU as Bus
-        participant DR as DriverImpl<br/>(the seam)
+        participant DR as DriverImpl (the seam)
     end
-    box rgb(249,168,37) AIDL HAL
-        participant HAL as IHdmiCec<br/>Controller
+    box transparent AIDL HAL
+        participant HAL as IHdmiCecController
     end
-    rect rgb(236,236,255)
-    Note over PL,DR: every hop above<br/>the seam<br/>is unchanged
-    PL->>CN: send /<br/>sendTo
+    Note over PL,DR: unchanged above the seam
+    PL->>CN: send / sendTo
     CN->>BU: Bus::send
-    BU->>DR: Driver::write<br/>(CECFrame)
-    DR->>HAL: sendMessage<br/>(byte[])
+    BU->>DR: Driver::write(CECFrame)
+    DR->>HAL: sendMessage(byte[])
     HAL-->>DR: SendMessageStatus
-    DR-->>BU: return, or<br/>throw
-    Note over CN,DR: CECNoAckException<br/>or IOException
-    Note over BU: the exception<br/>drives the<br/>resend loop
-    BU-->>CN: return, or<br/>re-throw<br/>once timeout<br/>/250 attempts<br/>at 250 ms are<br/>exhausted
-    CN-->>PL: plain send /<br/>sendTo<br/>swallow it —<br/>only the<br/>Throw_e<br/>overloads<br/>propagate
-    end
+    DR-->>BU: return, or throw
+    Note over CN,DR: CECNoAckException or IOException
+    Note over BU: the exception drives the resend loop
+    BU-->>CN: return, or re-throw when exhausted
+    CN-->>PL: plain overloads swallow it
 ```
 
 </div>
@@ -556,43 +557,35 @@ Only the two interactions between `DriverImpl` and the HAL change. Every hop abo
 
 ### Receive path — unchanged above the seam
 
-<div class="cec-diagram" data-search-exclude markdown="1">
+<div class="cec-diagram" data-search-exclude markdown="1" style="--cec-diagram-ar:2.82">
 
 ```mermaid
-%%{init: {"theme":"default","themeVariables":{"textColor":"#000000","actorBkg":"#ECECFF","actorBorder":"#212121","actorTextColor":"#000000","actorLineColor":"#212121","signalColor":"#212121","signalTextColor":"#000000","noteBkgColor":"#FFF3E0","noteBorderColor":"#E65100","noteTextColor":"#000000"},"sequence":{"diagramMarginX":8,"diagramMarginY":8,"actorMargin":10,"boxMargin":8,"width":66,"noteMargin":6,"messageMargin":26,"mirrorActors":false}}}%%
+%%{init: {"themeVariables":{"signalColor":"#838383"},"sequence":{"diagramMarginX":32,"diagramMarginY":24,"actorMargin":120,"boxMargin":14,"boxTextMargin":6,"width":150,"noteMargin":12,"messageMargin":44,"mirrorActors":false,"wrap":false}}}%%
 sequenceDiagram
     accTitle: Receive path, unchanged above the ccec seam
     accDescr: The AIDL HAL invokes onMessageReceived on the DriverImpl Binder listener as a oneway call. The listener first validates that the buffer holds 1 to 16 bytes, before any allocation. If the length is out of range it logs and returns, having allocated nothing. If the length is valid it copies the buffer into a CECFrame inside the try block, offers the frame to the bounded inbound queue, and a separate ccec Bus reader thread polls that queue through Driver read, receives the CECFrame, and notifies the Connection default frame listener, which in turn notifies the Thunder plugin frame listener. A conversion or offer failure frees the frame and never propagates, because the callback is oneway. Only the two seam steps are new; every hop above the seam is unchanged.
-    box rgb(249,168,37) AIDL HAL
-        participant HAL as AIDL<br/>HAL
+    box transparent AIDL HAL
+        participant HAL as AIDL HAL
     end
-    box rgb(67,160,71) ccec seam
-        participant LS as DriverImpl<br/>Binder<br/>listener
-        participant Q as inbound<br/>queue<br/>(rQueue)
+    box transparent ccec seam
+        participant LS as DriverImpl Binder listener
+        participant Q as inbound queue (rQueue)
     end
-    box rgb(30,136,229) ccec and plugin
-        participant RD as ccec Bus<br/>reader<br/>thread
-        participant CN as Connection<br/>Default<br/>Frame<br/>Listener
-        participant PL as Thunder<br/>plugin<br/>Frame<br/>Listener
+    box transparent ccec and plugin
+        participant RD as ccec Bus reader thread
+        participant CN as Connection DefaultFrameListener
+        participant PL as Thunder plugin FrameListener
     end
-    rect rgb(236,236,255)
-    HAL->>LS: onMessageReceived<br/>oneway
-    LS->>LS: validate<br/>1 to 16<br/>bytes,<br/>before any<br/>allocation
-    rect rgb(255,243,224)
-    Note over LS: if the length<br/>is out of range
-    LS->>LS: log and<br/>return —<br/>nothing<br/>allocated
-    end
-    rect rgb(232,245,233)
-    Note over LS: if the length<br/>is valid
-    LS->>LS: copy into<br/>CECFrame,<br/>inside<br/>the try
-    LS->>Q: rQueue<br/>.offer(frame)
-    RD->>Q: Driver::read<br/>polls it
+    HAL->>LS: onMessageReceived, oneway
+    Note over LS: NEW step 1 — validate 1 to 16 bytes, before any allocation
+    Note over LS: length out of range: log and return, nothing allocated
+    Note over LS: NEW step 2 — length valid: copy into CECFrame, inside the try
+    LS->>Q: rQueue.offer(frame)
+    RD->>Q: Driver::read polls it
     Q-->>RD: CECFrame
-    RD->>CN: notify<br/>(frame)
-    CN->>PL: notify<br/>(frame)
-    end
-    Note over LS,Q: conversion or<br/>offer failure<br/>frees the<br/>frame and<br/>never<br/>propagates —<br/>the callback<br/>is oneway
-    end
+    RD->>CN: notify(frame)
+    CN->>PL: notify(frame)
+    Note over LS,Q: conversion or offer failure frees the frame<br/>and never propagates — the callback is oneway
 ```
 
 </div>

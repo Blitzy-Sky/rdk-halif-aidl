@@ -21,6 +21,9 @@
 #** ******************************************************************************
 
 site_name: RDK Hardware Porting Kit
+site_description: >-
+  RDK Hardware Porting Kit - HAL interface definitions, specifications and
+  porting guidance for RDK-V devices, including the HDMI-CEC AIDL HAL.
 site_url: https://www.github.com/rdkcentral/rdk-halif-aidl
 site_dir: site # Site directory
 docs_dir: docs
@@ -207,11 +210,56 @@ extra_css:
 
 extra:
   version:
+    # `mike` is the correct provider for this project: `scripts/release.sh`
+    # deploys versioned documentation with `mike deploy <X.Y.Z> --push` followed
+    # by `mike set-default`, and the published `gh-pages` branch carries a real
+    # `versions.json` at its root alongside one directory per released version.
+    #
+    # The theme fetches that index as `../versions.json` relative to the site
+    # base. On the deployment platform the base is `/<version>/`, so the request
+    # resolves to the root file mike maintains and the selector renders. A plain
+    # `mkdocs build` served from the root has no parent directory to resolve
+    # against, so the same request used to 404 on every page - a console error on
+    # every local preview, and the sole reason Lighthouse withheld a perfect
+    # Best-Practices score.
+    #
+    # `docs/versions.json` closes that gap: it is a verbatim copy of the
+    # published index, so a standalone build serves exactly what the deployment
+    # serves. In a mike deployment the copy lands inside the version directory,
+    # where nothing reads it, and mike's own root index continues to win.
     provider: mike # This enables mike integration for the version selector
 
 extra_javascript:
-  - https://cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js
-  - javascript/mermaid-init.js
+  # Mermaid diagram runtime, pinned to an exact version.
+  #
+  # 11.15.0 is the release that patches the four advisories affecting every
+  # Mermaid <= 11.14.0 (gantt infinite-loop denial of service, two CSS-injection
+  # issues and one HTML-injection issue), so it is the lowest advisory-free 11.x.
+  #
+  # It is served from jsDelivr because cdnjs publishes no browser-ready bundle
+  # for Mermaid 11.x - the previously configured
+  # cdnjs.cloudflare.com/ajax/libs/mermaid/11.4.1/mermaid.min.js returns HTTP 404
+  # with an HTML body, which Chrome's Opaque Response Blocking then rejects
+  # outright, so `window.mermaid` was never defined on any page of this site.
+  #
+  # `defer` matters: deferred scripts run after parsing but *before*
+  # DOMContentLoaded, so this bundle defines `window.mermaid` before the theme
+  # mounts its diagrams. The theme only fetches its own copy when `mermaid` is
+  # undefined at mount time, so pinning it here also suppresses the theme's
+  # floating `unpkg.com/mermaid@11` request - one runtime, one origin, no
+  # undeclared version drift.
+  - path: https://cdn.jsdelivr.net/npm/mermaid@11.15.0/dist/mermaid.min.js
+    defer: true
+  # Guarded companion to the runtime above. It deliberately does NOT call
+  # mermaid.initialize(): the theme owns initialization, and a second
+  # initializer would race it. See the file header for detail.
+  - path: javascript/mermaid-init.js
+    defer: true
+  # Accessibility and interaction hardening for the theme's checkbox-driven
+  # drawer, table-of-contents and search panels. Progressive enhancement only:
+  # it adds no UI and changes no visual design. See the file header for detail.
+  - path: javascript/a11y.js
+    defer: true
 
 theme:
   name: material
